@@ -101,12 +101,12 @@ return res.status(201).json({
 
   let departmentId = null;
 if (department) {
-    console.log("Received department value:", department);
-
-  const departmentData = await Department.findById(department);
-  if (!departmentData) throw new Error(`Department not found.`);
+  const depId = typeof department === 'object' && department._id ? department._id : department;
+  const departmentData = await Department.findById(depId);
+  if (!departmentData) throw new Error(`Department '${depId}' not found.`);
   departmentId = departmentData._id;
 }
+
 
 
     const staff = await Staff.create({
