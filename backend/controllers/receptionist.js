@@ -153,8 +153,6 @@ const getAvailableDoctorsHandler = async (req, res) => {
   }
 };
 
-
-
 const createVisitHandler = async (req, res) => {
   try {
     const { patientId, patientDbId, visitType, assignedDoctorId, referredBy, payment } = req.body;
@@ -172,7 +170,7 @@ const createVisitHandler = async (req, res) => {
 // const doctor = await Doctor.findById(assignedDoctorId).populate('userId', 'name');
 let doctor = await Doctor.findById(assignedDoctorId).populate('userId', 'name');
 if (!doctor) {
-  doctor = await Doctor.findOne({ userId: assignedDoctorId }).populate('userId', 'name');
+  doctor = await Doctor.findOne({ _id: assignedDoctorId }).populate('userId', 'name');
 }
 if (!doctor) {
   return res.status(404).json({ message: "Doctor not found" });
