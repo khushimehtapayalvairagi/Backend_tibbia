@@ -73,27 +73,27 @@ exports.getSchedulesByPatient = async (req, res) => {
 };
 
 
-exports.updateProcedureStatus = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { status } = req.body;
+// exports.updateProcedureStatus = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const { status } = req.body;
 
-        if (!['Scheduled', 'In Progress', 'Completed', 'Cancelled'].includes(status)) {
-            return res.status(400).json({ message: 'Invalid status.' });
-        }
+//         if (!['Scheduled', 'In Progress', 'Completed', 'Cancelled'].includes(status)) {
+//             return res.status(400).json({ message: 'Invalid status.' });
+//         }
 
-        const procedure = await ProcedureSchedule.findById(id);
-        if (!procedure) return res.status(404).json({ message: 'Procedure not found.' });
+//         const procedure = await ProcedureSchedule.findById(id);
+//         if (!procedure) return res.status(404).json({ message: 'Procedure not found.' });
 
-        procedure.status = status;
-        await procedure.save();
+//         procedure.status = status;
+//         await procedure.save();
 
-        res.status(200).json({ message: 'Procedure status updated.', procedure });
+//         res.status(200).json({ message: 'Procedure status updated.', procedure });
 
-    } catch (error) {
-        res.status(500).json({ message: 'Server error.' });
-    }
-};
+//     } catch (error) {
+//         res.status(500).json({ message: 'Server error.' });
+//     }
+// };
 
 
 exports.createAnesthesiaRecord = async (req, res) => {
