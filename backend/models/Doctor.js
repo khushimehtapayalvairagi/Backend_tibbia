@@ -27,5 +27,5 @@ schedule: { type: Array, default: [] },
   // isAvailable: { type: Boolean, default: false }, // doctor login/logout availability
   // isActive: { type: Boolean, default: true }
 });
-
+console.log("Doctor model loaded with isActive default:", DoctorSchema.path("isActive")?.options?.default);
 module.exports = mongoose.models.Doctor || mongoose.model('Doctor', DoctorSchema);
