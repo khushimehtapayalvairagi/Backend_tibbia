@@ -158,62 +158,19 @@ const getPatientByIdHandler = async (req, res) => {
 // ✅ Fixed version — getAvailableDoctorsHandler
 // ✅ FIXED getAvailableDoctorsHandler
 const getAvailableDoctorsHandler = async (req, res) => {
-  try {
-    const { specialtyId, specialtyName } = req.body;
+ try {
+    const doctors = await Doctor.find({ isActive: true })
+      .populate('userId', 'name email') // get doctor's name
+      .populate('specialty', 'name');   // get specialty name
 
-    // Require at least one
-    if (!specialtyId && !specialtyName) {
-      return res
-        .status(400)
-        .json({ message: "Either specialtyId or specialtyName is required." });
+    if (!doctors.length) {
+      return res.status(200).json({ doctors: [], message: "No doctors found." });
     }
 
-    // Find specialty by ID or name
-    const specialty = specialtyId
-      ? await Specialty.findById(specialtyId)
-      : await Specialty.findOne({
-          name: { $regex: new RegExp(`^${specialtyName.trim()}$`, "i") },
-        });
-
-    if (!specialty) {
-      return res.status(404).json({ message: "Specialty not found." });
-    }
-
-    // Fetch active doctors with this specialty
-    const doctors = await Doctor.find({
-      specialty: specialty._id,
-      isActive: true,
-    })
-      .populate("userId", "name email role")
-      .populate("specialty", "name")
-      .populate("department", "name");
-
-    if (!doctors || doctors.length === 0) {
-      return res.status(200).json({
-        doctors: [],
-        message: "No doctors found for this specialty.",
-      });
-    }
-
-    // Format the response
-    const doctorList = doctors.map((doc) => ({
-      doctorId: doc._id,
-      name: doc.userId?.name || "Unnamed Doctor",
-      email: doc.userId?.email || "",
-      specialty: doc.specialty?.name || "",
-      department: doc.department?.name || "",
-    }));
-
-    return res.status(200).json({
-      message: "Doctors for this specialty fetched successfully.",
-      doctors: doctorList,
-    });
+    res.status(200).json({ doctors });
   } catch (error) {
-    console.error("❌ Error fetching doctors:", error);
-    res.status(500).json({
-      message: "Error fetching doctors",
-      error: error.message,
-    });
+    console.error("Error fetching doctors:", error);
+    res.status(500).json({ message: "Server error while fetching doctors." });
   }
 };
 
