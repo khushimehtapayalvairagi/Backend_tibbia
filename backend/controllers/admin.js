@@ -81,16 +81,16 @@ const registerHandler = async (req, res) => {
       const departmentData = await Department.findById(department);
       if (!departmentData) throw new Error('Department not found.');
 
-      // const allDays = [
-      //   'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
-      // ];
+      const allDays = [
+        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+      ];
 
-      // const fullWeekSchedule = allDays.map(day => ({
-      //   dayOfWeek: day,
-      //   startTime: '00:00',
-      //   endTime: '23:59',
-      //   isAvailable: true,
-      // }));
+      const fullWeekSchedule = allDays.map(day => ({
+        dayOfWeek: day,
+        startTime: '00:00',
+        endTime: '23:59',
+        isAvailable: true,
+      }));
 
       const doctor = await Doctor.create({
         userId: newUser._id,
@@ -98,7 +98,7 @@ const registerHandler = async (req, res) => {
         specialty: specialtyData._id,
         department: departmentData._id,
         medicalLicenseNumber,
-        // schedule: schedule && schedule.length ? schedule : fullWeekSchedule,
+        schedule: schedule && schedule.length ? schedule : fullWeekSchedule,
          isActive: true,
       });
 
@@ -124,7 +124,7 @@ const registerHandler = async (req, res) => {
         userId: newUser._id,
         contactNumber,
         designation,
-          department: departmentData._id, 
+       department:departmentData._id
       });
 
       return res.status(201).json({

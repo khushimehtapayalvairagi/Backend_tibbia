@@ -6,19 +6,18 @@ const DoctorSchema = new mongoose.Schema({
   specialty: { type: mongoose.Schema.Types.ObjectId, ref: 'Specialty', required: true },
   department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
   medicalLicenseNumber: { type: String, required: true, unique: true },
-schedule: { type: Array, default: [] },
 
   // ✅ Always save doctor schedule (default: empty)
-  // schedule: [{
-  //   dayOfWeek: {
-  //     type: String,
-  //     enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-  //     required: true
-  //   },
-  //   startTime: { type: String, required: true },
-  //   endTime: { type: String, required: true },
-  //   isAvailable: { type: Boolean, default: true }
-  // }],
+  schedule: [{
+    dayOfWeek: {
+      type: String,
+      enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+      required: true
+    },
+    startTime: { type: String, required: true },
+    endTime: { type: String, required: true },
+    isAvailable: { type: Boolean, default: true }
+  }],
           isActive: {
   type: Boolean,
   default: true, // default active on registration
@@ -27,5 +26,5 @@ schedule: { type: Array, default: [] },
   // isAvailable: { type: Boolean, default: false }, // doctor login/logout availability
   // isActive: { type: Boolean, default: true }
 });
-console.log("Doctor model loaded with isActive default:", DoctorSchema.path("isActive")?.options?.default);
+
 module.exports = mongoose.models.Doctor || mongoose.model('Doctor', DoctorSchema);
