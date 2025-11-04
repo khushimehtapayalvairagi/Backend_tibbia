@@ -642,7 +642,10 @@ exports.bulkUploadStaff = async (req, res) => {
       // Handle department if provided
       let departmentId = null;
       if (department) {
-        const departmentData = await Department.findOne({ name: department });
+     const departmentData = await Department.findOne({
+  name: new RegExp(`^${department}$`, 'i'),
+});
+
         if (!departmentData) {
           errors.push({ row: rowNum, error: "Department not found" });
           continue;
