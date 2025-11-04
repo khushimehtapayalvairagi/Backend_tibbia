@@ -110,29 +110,32 @@ const registerHandler = async (req, res) => {
     }
 
     // ✅ Handle STAFF (fixed version)
-    if (role.toUpperCase() === 'STAFF') {
+      if (role.toUpperCase() === 'STAFF') {
       if (!contactNumber || !designation) {
         throw new Error('contactNumber and designation are required for Staff.');
       }
 
-   const departmentData = await Department.findById(department);
-      if (!departmentData) throw new Error('Department not found.');
-
-
+      let departmentId = null;
+      if (department) {
+        const departmentData = await Department.findOne({ name: department.trim() });
+        if (!departmentData) throw new Error(`Department '${department}' not found.`);
+        departmentId = departmentData._id;
+      }
 
       const staff = await Staff.create({
         userId: newUser._id,
         contactNumber,
         designation,
-       department:departmentData._id
+        department: departmentId
       });
 
       return res.status(201).json({
         message: 'Staff registered successfully.',
         userId: newUser._id,
-        staffId: staff._id,
+        staffId: staff._id
       });
     }
+
 
     // Handle unknown roles
     throw new Error('Invalid role.');
