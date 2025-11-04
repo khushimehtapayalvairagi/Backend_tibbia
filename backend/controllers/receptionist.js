@@ -155,19 +155,19 @@ const getPatientByIdHandler = async (req, res) => {
 
 // controllers/receptionist.js
 
-
+// ✅ Fixed version — getAvailableDoctorsHandler
 const getAvailableDoctorsHandler = async (req, res) => {
   try {
     const { specialtyId, specialtyName } = req.body;
 
-    // ✅ Validate: must provide at least one
+    // Require at least one
     if (!specialtyId && !specialtyName) {
-      return res.status(400).json({
-        message: "Either specialtyId or specialtyName is required.",
-      });
+      return res
+        .status(400)
+        .json({ message: "Either specialtyId or specialtyName is required." });
     }
 
-    // ✅ Find specialty (by ID or name)
+    // Find specialty
     const specialty = specialtyId
       ? await Specialty.findById(specialtyId)
       : await Specialty.findOne({
@@ -178,7 +178,7 @@ const getAvailableDoctorsHandler = async (req, res) => {
       return res.status(404).json({ message: "Specialty not found." });
     }
 
-    // ✅ Find active doctors linked to that specialty
+    // Find active doctors with that specialty
     const doctors = await Doctor.find({
       specialty: specialty._id,
       isActive: true,
@@ -187,7 +187,7 @@ const getAvailableDoctorsHandler = async (req, res) => {
       .populate("specialty", "name")
       .populate("department", "name");
 
-    // ✅ No doctors found
+    // If none found
     if (!doctors || doctors.length === 0) {
       return res.status(200).json({
         doctors: [],
@@ -195,7 +195,7 @@ const getAvailableDoctorsHandler = async (req, res) => {
       });
     }
 
-    // ✅ Format doctors for frontend
+    // Format result
     const doctorList = doctors.map((doc) => ({
       doctorId: doc._id,
       name: doc.userId?.name || "Unnamed Doctor",
@@ -216,6 +216,7 @@ const getAvailableDoctorsHandler = async (req, res) => {
     });
   }
 };
+
 
 
 
