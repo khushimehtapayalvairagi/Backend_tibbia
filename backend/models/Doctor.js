@@ -6,18 +6,19 @@ const DoctorSchema = new mongoose.Schema({
   specialty: { type: mongoose.Schema.Types.ObjectId, ref: 'Specialty', required: true },
   department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
   medicalLicenseNumber: { type: String, required: true, unique: true },
+schedule: { type: Array, default: [] },
 
   // ✅ Always save doctor schedule (default: empty)
-  schedule: [{
-    dayOfWeek: {
-      type: String,
-      enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-      required: true
-    },
-    startTime: { type: String, required: true },
-    endTime: { type: String, required: true },
-    isAvailable: { type: Boolean, default: true }
-  }],
+  // schedule: [{
+  //   dayOfWeek: {
+  //     type: String,
+  //     enum: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+  //     required: true
+  //   },
+  //   startTime: { type: String, required: true },
+  //   endTime: { type: String, required: true },
+  //   isAvailable: { type: Boolean, default: true }
+  // }],
           isActive: {
   type: Boolean,
   default: true, // default active on registration
