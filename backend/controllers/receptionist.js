@@ -157,13 +157,14 @@ const getAvailableDoctorsHandler = async (req, res) => {
   try {
     const { specialtyId, specialtyName } = req.body;
 
+    // Ensure either specialtyId or name is provided
     if (!specialtyId && !specialtyName) {
       return res
         .status(400)
         .json({ message: 'specialtyId or specialtyName is required.' });
     }
 
-    // 🩺 Find the specialty either by ID or by name
+    // Fetch specialty either by ID or by name
     const specialty = specialtyId
       ? await Specialty.findById(specialtyId)
       : await Specialty.findOne({
@@ -174,22 +175,23 @@ const getAvailableDoctorsHandler = async (req, res) => {
       return res.status(404).json({ message: 'Specialty not found.' });
     }
 
-    // 👩‍⚕️ Find doctors for that specialty
+    // Fetch doctors who belong to that specialty (ignore schedule)
     const doctors = await Doctor.find({
       specialty: specialty._id,
-      isActive: true,
+      isActive: true, // only active doctors
     })
       .populate('userId', 'name email role')
       .populate('specialty', 'name')
       .populate('department', 'name');
 
     if (!doctors || doctors.length === 0) {
-      return res
-        .status(200)
-        .json({ doctors: [], message: 'No doctors found for this specialty.' });
+      return res.status(200).json({
+        doctors: [],
+        message: 'No doctors found for this specialty.',
+      });
     }
 
-    // 🧩 MAP step: simplify the doctor objects
+    // Clean output for frontend
     const doctorList = doctors.map((doc) => ({
       doctorId: doc._id,
       name: doc.userId?.name || 'Unnamed Doctor',
@@ -198,18 +200,19 @@ const getAvailableDoctorsHandler = async (req, res) => {
       department: doc.department?.name || '',
     }));
 
-    // ✅ send clean data
     return res.status(200).json({
-      message: 'Doctors for specialty fetched successfully.',
+      message: 'Doctors for this specialty fetched successfully.',
       doctors: doctorList,
     });
   } catch (error) {
     console.error('❌ Error fetching doctors by specialty:', error);
-    res
-      .status(500)
-      .json({ message: 'Error fetching doctors', error: error.message });
+    res.status(500).json({
+      message: 'Error fetching doctors',
+      error: error.message,
+    });
   }
 };
+
 
 
 
