@@ -153,65 +153,73 @@ const getPatientByIdHandler = async (req, res) => {
 //   }
 // };
 
+// controllers/receptionist.js
+const Doctor = require("../models/Doctor");
+const Specialty = require("../models/Specialty");
+
 const getAvailableDoctorsHandler = async (req, res) => {
   try {
     const { specialtyId, specialtyName } = req.body;
 
-    // Ensure either specialtyId or name is provided
+    // ✅ Validate: must provide at least one
     if (!specialtyId && !specialtyName) {
-      return res
-        .status(400)
-        .json({ message: 'specialtyId or specialtyName is required.' });
-    }
-
-    // Fetch specialty either by ID or by name
-    const specialty = specialtyId
-      ? await Specialty.findById(specialtyId)
-      : await Specialty.findOne({
-          name: { $regex: new RegExp(`^${specialtyName.trim()}$`, 'i') },
-        });
-
-    if (!specialty) {
-      return res.status(404).json({ message: 'Specialty not found.' });
-    }
-
-    // Fetch doctors who belong to that specialty (ignore schedule)
-    const doctors = await Doctor.find({
-      specialty: specialty._id,
-      isActive: true, // only active doctors
-    })
-      .populate('userId', 'name email role')
-      .populate('specialty', 'name')
-      .populate('department', 'name');
-
-    if (!doctors || doctors.length === 0) {
-      return res.status(200).json({
-        doctors: [],
-        message: 'No doctors found for this specialty.',
+      return res.status(400).json({
+        message: "Either specialtyId or specialtyName is required.",
       });
     }
 
-    // Clean output for frontend
+    // ✅ Find specialty (by ID or name)
+    const specialty = specialtyId
+      ? await Specialty.findById(specialtyId)
+      : await Specialty.findOne({
+          name: { $regex: new RegExp(`^${specialtyName.trim()}$`, "i") },
+        });
+
+    if (!specialty) {
+      return res.status(404).json({ message: "Specialty not found." });
+    }
+
+    // ✅ Find active doctors linked to that specialty
+    const doctors = await Doctor.find({
+      specialty: specialty._id,
+      isActive: true,
+    })
+      .populate("userId", "name email role")
+      .populate("specialty", "name")
+      .populate("department", "name");
+
+    // ✅ No doctors found
+    if (!doctors || doctors.length === 0) {
+      return res.status(200).json({
+        doctors: [],
+        message: "No doctors found for this specialty.",
+      });
+    }
+
+    // ✅ Format doctors for frontend
     const doctorList = doctors.map((doc) => ({
       doctorId: doc._id,
-      name: doc.userId?.name || 'Unnamed Doctor',
-      email: doc.userId?.email || '',
-      specialty: doc.specialty?.name || '',
-      department: doc.department?.name || '',
+      name: doc.userId?.name || "Unnamed Doctor",
+      email: doc.userId?.email || "",
+      specialty: doc.specialty?.name || "",
+      department: doc.department?.name || "",
     }));
 
     return res.status(200).json({
-      message: 'Doctors for this specialty fetched successfully.',
+      message: "Doctors for this specialty fetched successfully.",
       doctors: doctorList,
     });
   } catch (error) {
-    console.error('❌ Error fetching doctors by specialty:', error);
+    console.error("❌ Error fetching doctors:", error);
     res.status(500).json({
-      message: 'Error fetching doctors',
+      message: "Error fetching doctors",
       error: error.message,
     });
   }
 };
+
+module.exports = { getAvailableDoctorsHandler };
+
 
 
 
