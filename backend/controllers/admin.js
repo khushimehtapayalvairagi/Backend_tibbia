@@ -115,23 +115,17 @@ const registerHandler = async (req, res) => {
         throw new Error('contactNumber and designation are required for Staff.');
       }
 
-      let departmentId = null;
- if (department) {
-  console.log("📘 Raw department value:", department);
+let departmentData = null;
 
-  const departmentIdValue =
-    typeof department === "object" ? department._id : department?.trim();
-
-  console.log("📗 Clean department value for DB:", departmentIdValue);
-
-  const departmentData = await Department.findById(departmentIdValue);
-  console.log("📙 Department data found in DB:", departmentData);
-
-  if (!departmentData)
-    throw new Error(`Department '${departmentIdValue}' not found.`);
-
-  departmentId = departmentData._id;
+if (department) {
+  if (/^[0-9a-fA-F]{24}$/.test(department)) {
+    departmentData = await Department.findById(department);
+  } else {
+    departmentData = await Department.findOne({ name: new RegExp(`^${department}$`, 'i') });
+  }
 }
+
+if (!departmentData) throw new Error(`Department '${department}' not found.`);
 
 
 
