@@ -154,8 +154,7 @@ const getPatientByIdHandler = async (req, res) => {
 // };
 
 // controllers/receptionist.js
-const Doctor = require("../models/Doctor");
-const Specialty = require("../models/Specialty");
+
 
 const getAvailableDoctorsHandler = async (req, res) => {
   try {
@@ -218,7 +217,6 @@ const getAvailableDoctorsHandler = async (req, res) => {
   }
 };
 
-module.exports = { getAvailableDoctorsHandler };
 
 
 
