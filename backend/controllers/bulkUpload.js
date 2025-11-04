@@ -516,11 +516,10 @@ exports.bulkUploadDoctors = async (req, res) => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const rowNum = i + 2; // Excel-like row numbers
+      const rowNum = i + 2;
 
       let { name, email, password, doctorType, specialty, department, medicalLicenseNumber } = row;
 
-      // Normalize / trim input
       name = String(name || "").trim();
       email = String(email || "").trim();
       password = String(password || "").trim();
@@ -529,17 +528,13 @@ exports.bulkUploadDoctors = async (req, res) => {
       department = String(department || "").trim();
       medicalLicenseNumber = String(medicalLicenseNumber || "").trim();
 
-      // Validation
       if (!name || !email || !password || !doctorType || !specialty || !department || !medicalLicenseNumber) {
         errors.push({ row: rowNum, error: "Missing required fields" });
         continue;
       }
 
+      // Check if user already exists
       const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        errors.push({ row: rowNum, error: "Email already exists" });
-        continue;
-      }
 
       const specialtyData = await Specialty.findOne({ name: new RegExp(`^${specialty}$`, "i") });
       const departmentData = await Department.findOne({ name: new RegExp(`^${department}$`, "i") });
@@ -549,9 +544,26 @@ exports.bulkUploadDoctors = async (req, res) => {
         continue;
       }
 
-      const hashedPassword = await bcrypt.hash(password, 10);
+      if (existingUser) {
+        // ✅ Update existing doctor to active
+        await Doctor.findOneAndUpdate(
+          { userId: existingUser._id },
+          {
+            doctorType,
+            specialty: specialtyData._id,
+            department: departmentData._id,
+            medicalLicenseNumber,
+            isActive: true,
+          },
+          { new: true }
+        );
 
-      // ✅ Create User
+        successCount++;
+        continue;
+      }
+
+      // Create new user
+      const hashedPassword = await bcrypt.hash(password, 10);
       const newUser = await User.create({
         name,
         email,
@@ -559,14 +571,14 @@ exports.bulkUploadDoctors = async (req, res) => {
         role: "DOCTOR",
       });
 
-      // ✅ Create Doctor (without schedule)
+      // Create doctor
       await Doctor.create({
         userId: newUser._id,
         doctorType,
         specialty: specialtyData._id,
         department: departmentData._id,
         medicalLicenseNumber,
-        isActive: true, // Default active doctor
+        isActive: true, // ✅ Always active
       });
 
       successCount++;
@@ -585,6 +597,7 @@ exports.bulkUploadDoctors = async (req, res) => {
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
+
 
 
 // ----------- BULK UPLOAD STAFF -----------
