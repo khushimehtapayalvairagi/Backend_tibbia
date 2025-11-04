@@ -603,12 +603,13 @@ exports.bulkUploadDoctors = async (req, res) => {
 // ----------- BULK UPLOAD STAFF -----------
 
 
+
 exports.bulkUploadStaff = async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
   try {
     const data = await parseFile(req.file.path);
-    fs.unlinkSync(req.file.path);
+    fs.unlinkSync(req.file.path); // delete file after parsing
 
     if (!data.length) throw new Error("File is empty");
 
@@ -619,26 +620,25 @@ exports.bulkUploadStaff = async (req, res) => {
       const row = data[i];
 
       try {
-        // find department - works for both name or _id
-        let department;
+        // ✅ Find Department (supports both name and _id)
+        let departmentData;
         if (/^[0-9a-fA-F]{24}$/.test(row.department)) {
-          // If department looks like ObjectId
-          department = await Department.findById(row.department);
+          departmentData = await Department.findById(row.department);
         } else {
-          // otherwise search by name
-          department = await Department.findOne({
+          departmentData = await Department.findOne({
             name: { $regex: new RegExp("^" + row.department + "$", "i") },
           });
         }
 
-        if (!department)
+        if (!departmentData)
           throw new Error(`Department '${row.department}' not found.`);
 
-        // check if user already exists
+        // ✅ Check duplicate user
         const existingUser = await User.findOne({ email: row.email });
-        if (existingUser) throw new Error(`Email '${row.email}' already exists.`);
+        if (existingUser)
+          throw new Error(`Email '${row.email}' already exists.`);
 
-        // create user for staff
+        // ✅ Create user (STAFF)
         const hashedPassword = await bcrypt.hash(row.password || "123456", 10);
         const newUser = await User.create({
           name: row.name,
@@ -647,12 +647,12 @@ exports.bulkUploadStaff = async (req, res) => {
           role: "STAFF",
         });
 
-        // create staff
+        // ✅ Create staff document
         await Staff.create({
           userId: newUser._id,
-          departmentId: department._id,
-          phone: row.phone,
-          designation: row.designation,
+          department: departmentData._id,
+          designation: row.designation || "",
+          contactNumber: row.phone || row.contactNumber || "",
           isActive: true,
         });
 
@@ -662,12 +662,13 @@ exports.bulkUploadStaff = async (req, res) => {
       }
     }
 
-    return res.status(200).json({
+    res.status(200).json({
       message: `Bulk upload completed. ${successCount} staff added.`,
       errors,
     });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: err.message });
+    console.error("Bulk upload error:", err);
+    res.status(500).json({ message: err.message });
   }
 };
+
