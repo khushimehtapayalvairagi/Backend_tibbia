@@ -551,6 +551,7 @@ exports.bulkUploadDoctors = async (req, res) => {
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
+      // ✅ Create User
       const newUser = await User.create({
         name,
         email,
@@ -558,29 +559,25 @@ exports.bulkUploadDoctors = async (req, res) => {
         role: "DOCTOR",
       });
 
-      const defaultSchedule = [
-        "Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"
-      ].map(day => ({
-        dayOfWeek: day,
-        startTime: "09:00",
-        endTime: "17:00",
-        isAvailable: true
-      }));
-
+      // ✅ Create Doctor (without schedule)
       await Doctor.create({
         userId: newUser._id,
         doctorType,
         specialty: specialtyData._id,
         department: departmentData._id,
         medicalLicenseNumber,
-        schedule: defaultSchedule,
+        isActive: true, // Default active doctor
       });
 
       successCount++;
     }
 
     if (errors.length)
-      return res.status(400).json({ message: "Some rows failed", errorRows: errors, successCount });
+      return res.status(400).json({
+        message: "Some rows failed",
+        errorRows: errors,
+        successCount,
+      });
 
     res.json({ message: "Doctors uploaded successfully", successCount });
   } catch (err) {
@@ -588,6 +585,7 @@ exports.bulkUploadDoctors = async (req, res) => {
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
+
 
 // ----------- BULK UPLOAD STAFF -----------
 exports.bulkUploadStaff = async (req, res) => {
