@@ -118,7 +118,7 @@ const registerHandler = async (req, res) => {
       let departmentId = null;
       if (department) {
         const departmentData = await Department.findOne({ name: department.trim() });
-        if (!departmentData) throw new Error(`Department '${department}' not found.`);
+        if (!departmentData) throw new Error(`Department not found.`);
         departmentId = departmentData._id;
       }
 
