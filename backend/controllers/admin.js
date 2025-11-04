@@ -99,6 +99,7 @@ const registerHandler = async (req, res) => {
         department: departmentData._id,
         medicalLicenseNumber,
         schedule: schedule && schedule.length ? schedule : fullWeekSchedule,
+         isActive: true,
       });
 
       return res.status(201).json({
