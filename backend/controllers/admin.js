@@ -109,37 +109,30 @@ const registerHandler = async (req, res) => {
       });
     }
 
-  if (role.toUpperCase() === 'STAFF') {
-  if (!contactNumber || !designation) {
-    throw new Error('contactNumber and designation are required for Staff.');
-  }
+    // ✅ Handle STAFF (fixed version)
+    if (role.toUpperCase() === 'STAFF') {
+      if (!contactNumber || !designation) {
+        throw new Error('contactNumber and designation are required for Staff.');
+      }
 
-  let departmentData = null;
+   const departmentData = await Department.findById(department);
+      if (!departmentData) throw new Error('Department not found.');
 
-  if (department) {
-    if (/^[0-9a-fA-F]{24}$/.test(department)) {
-      departmentData = await Department.findById(department);
-    } else {
-      departmentData = await Department.findOne({ name: new RegExp(`^${department}$`, 'i') });
+
+
+      const staff = await Staff.create({
+        userId: newUser._id,
+        contactNumber,
+        designation,
+          department: departmentData._id, 
+      });
+
+      return res.status(201).json({
+        message: 'Staff registered successfully.',
+        userId: newUser._id,
+        staffId: staff._id,
+      });
     }
-  }
-
-  if (!departmentData) throw new Error(`Department '${department}' not found.`);
-
-  const staff = await Staff.create({
-    userId: newUser._id,
-    contactNumber,
-    designation,
-    department: departmentData._id,  // ✅ fixed here
-  });
-
-  return res.status(201).json({
-    message: 'Staff registered successfully.',
-    userId: newUser._id,
-    staffId: staff._id,
-  });
-}
-
 
     // Handle unknown roles
     throw new Error('Invalid role.');
