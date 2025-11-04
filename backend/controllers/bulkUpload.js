@@ -601,6 +601,8 @@ exports.bulkUploadDoctors = async (req, res) => {
 
 
 // ----------- BULK UPLOAD STAFF -----------
+
+
 exports.bulkUploadStaff = async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -615,77 +617,57 @@ exports.bulkUploadStaff = async (req, res) => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const rowNum = i + 2; // For Excel row reference
-      let { name, email, password, contactNumber, designation, department } = row;
-
-      // Trim all values
-      name = String(name || "").trim();
-      email = String(email || "").trim();
-      password = String(password || "").trim();
-      contactNumber = String(contactNumber || "").trim();
-      designation = String(designation || "").trim();
-      department = department ? String(department).trim() : null;
-
-      // Validate required fields
-      if (!name || !email || !password || !contactNumber || !designation) {
-        errors.push({ row: rowNum, error: "Missing required fields" });
-        continue;
-      }
-
-      // Check if user already exists
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        errors.push({ row: rowNum, error: "Email already exists" });
-        continue;
-      }
-
-      // Handle department if provided
-      let departmentId = null;
-      if (department) {
-     const departmentData = await Department.findOne({
-  name: new RegExp(`^${department}$`, 'i'),
-});
-
-        if (!departmentData) {
-          errors.push({ row: rowNum, error: "Department not found" });
-          continue;
-        }
-        departmentId = departmentData._id;
-      }
 
       try {
-        // Hash the password safely
-        const hashedPassword = await bcrypt.hash(password, 10);
+        // find department - works for both name or _id
+        let department;
+        if (/^[0-9a-fA-F]{24}$/.test(row.department)) {
+          // If department looks like ObjectId
+          department = await Department.findById(row.department);
+        } else {
+          // otherwise search by name
+          department = await Department.findOne({
+            name: { $regex: new RegExp("^" + row.department + "$", "i") },
+          });
+        }
 
-        // Create User
+        if (!department)
+          throw new Error(`Department '${row.department}' not found.`);
+
+        // check if user already exists
+        const existingUser = await User.findOne({ email: row.email });
+        if (existingUser) throw new Error(`Email '${row.email}' already exists.`);
+
+        // create user for staff
+        const hashedPassword = await bcrypt.hash(row.password || "123456", 10);
         const newUser = await User.create({
-          name,
-          email,
+          name: row.name,
+          email: row.email,
           password: hashedPassword,
           role: "STAFF",
         });
 
-        // Create Staff
+        // create staff
         await Staff.create({
           userId: newUser._id,
-          contactNumber,
-          designation,
-          department: departmentId,
+          departmentId: department._id,
+          phone: row.phone,
+          designation: row.designation,
+          isActive: true,
         });
 
         successCount++;
       } catch (err) {
-        errors.push({ row: rowNum, error: "Failed to create user/staff: " + err.message });
+        errors.push({ row: i + 1, error: err.message });
       }
     }
 
-    if (errors.length) {
-      return res.status(400).json({ message: "Some rows failed", errorRows: errors, successCount });
-    }
-
-    res.json({ message: "Staff uploaded successfully", successCount });
+    return res.status(200).json({
+      message: `Bulk upload completed. ${successCount} staff added.`,
+      errors,
+    });
   } catch (err) {
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ message: "Upload failed", error: err.message });
+    console.error(err);
+    return res.status(500).json({ message: err.message });
   }
 };
