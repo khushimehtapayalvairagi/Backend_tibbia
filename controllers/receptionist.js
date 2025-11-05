@@ -158,17 +158,10 @@ const getPatientByIdHandler = async (req, res) => {
 // ✅ Fixed version — getAvailableDoctorsHandler
 // ✅ FIXED getAvailableDoctorsHandler
 const getAvailableDoctorsHandler = async (req, res) => {
-  try {
-    const { specialtyId } = req.query; // use query parameter
-
-    const filter = { isActive: true };
-    if (specialtyId) {
-      filter.specialty = specialtyId; // filter by specialty
-    }
-
-    const doctors = await Doctor.find(filter)
-      .populate('userId', 'name email')
-      .populate('specialty', 'name');
+ try {
+    const doctors = await Doctor.find({ isActive: true })
+      .populate('userId', 'name email') // get doctor's name
+      .populate('specialty', 'name');   // get specialty name
 
     if (!doctors.length) {
       return res.status(200).json({ doctors: [], message: "No doctors found." });
