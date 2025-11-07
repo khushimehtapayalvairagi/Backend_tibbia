@@ -36,22 +36,34 @@ exports.getLabTests = async (req, res) => {
 
 // Add test result
 // Add test result
+const LabTest = require('../models/LabTest');
+const Patient = require('../models/Patient');
+const LabPayment = require('../models/LabPayment');
+const Staff = require('../models/Staff');
+
+const fs = require('fs');
+const path = require('path');
+
+const uploadDir = path.join(__dirname, '../uploads/labReports');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
+
+// Add test result
 exports.addTestResult = async (req, res) => {
   try {
-    const { patientId, testType, date, result, results } = req.body;
+    const { patientId, testType, date, results } = req.body;
 
-    // Normalize — accept either `result` or `results[]`
-    const finalResult = Array.isArray(results)
-      ? results.filter(r => r.trim() !== "")
-      : result
-      ? [result]
+    // Ensure results is array of non-empty strings
+    const finalResults = Array.isArray(results)
+      ? results.filter(r => typeof r === 'string' && r.trim() !== "")
       : [];
 
     const test = new LabTest({
       patientId,
       testType,
       date,
-      results: finalResult, // always store array
+      results: finalResults,
       status: "Pending",
     });
 
@@ -62,6 +74,7 @@ exports.addTestResult = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 
@@ -76,9 +89,8 @@ exports.getAppointments = async (req, res) => {
 };
 exports.uploadReport = async (req, res) => {
   try {
-    const { testId, amount, paymentStatus = "Pending", notes = "" } = req.body;
+    const { testId, amount, paymentStatus = "Pending", notes = "", result } = req.body;
 
-    // Optional file path logic (if you still want to keep it)
     let filePath = null;
     if (req.file) {
       filePath = `/uploads/labReports/${req.file.filename}`;
@@ -88,15 +100,19 @@ exports.uploadReport = async (req, res) => {
       status: "Completed",
       labTechnician: req.user._id,
     };
+
+    // ✅ Add result to results array if provided
+    if (result && result.trim() !== "") {
+      updateData.$push = { results: result.trim() };
+    }
+
     if (filePath) {
       updateData.reportFile = filePath;
     }
 
-    const test = await LabTest.findByIdAndUpdate(
-      testId,
-      updateData,
-      { new: true }
-    )
+    const test = await LabTest.findByIdAndUpdate(testId, updateData, {
+      new: true,
+    })
       .populate("patientId")
       .populate({ path: "labTechnician", populate: { path: "userId", select: "name" } });
 
@@ -122,6 +138,7 @@ exports.uploadReport = async (req, res) => {
     return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 exports.getPendingPayments = async (req, res) => {
   try {
