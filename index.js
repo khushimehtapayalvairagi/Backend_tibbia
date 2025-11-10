@@ -7,7 +7,7 @@ const dotenv = require('dotenv');
 const { restrictToLoggedInUserOnly, restrictTo, restrictToDesignation } = require('./middlewares/auth');
 dotenv.config();
 
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 9000;
 const app = express();
 const server = http.createServer(app); 
 
@@ -19,8 +19,8 @@ app.use(cookieParser());
 app.use(
   cors({
     // origin: ["https://uudra.in", "http://localhost:3000"],
-        // origin: [ "http://localhost:3000"],
-          origin: ["https://kloudcrm.site", "http://kloudcrm.site", "https://www.kloudcrm.site"],
+        origin: ["http://localhost:3001","http://localhost:3000"],
+          // origin: ["https://kloudcrm.site", "http://kloudcrm.site", "https://www.kloudcrm.site"],
       //      origin: [ "https://tibbia.kloudcrm.site",  // ✅ Add this line
       // "http://tibbia.kloudcrm.site" ],
 
