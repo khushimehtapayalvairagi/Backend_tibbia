@@ -3,7 +3,7 @@ const {registerHandler,getAllUsersHandler,createDepartmentHandler
     ,getAllDepartmentsHandler,createSpecialtyHandler,getAllSpecialtiesHandler,createRoomCategoryHandler
     ,getAllRoomCategoriesHandler,createWardHandler,getAllWardsHandler,createLabourRoomHandler,getAllLabourRoomsHandler
     ,createProcedureHandler,getAllProceduresHandler,createManualChargeItemHandler,getAllManualChargeItemsHandler
-    ,getAllStaffHandler,getStaffByIdHandler,getAllDoctorsHandler
+    ,getAllStaffHandler,getStaffByIdHandler,getAllDoctorsHandler,getDoctorByIdHandler
     ,createReferralPartnerHandler,getAllReferralPartnersHandler,createOperationTheaterHandler
     ,getAllOperationTheatersHandler,deleteUserHandler}  = require("../controllers/admin")
 const {createInventoryItem} = require('../controllers/inventoryManager');
@@ -31,7 +31,7 @@ router.get('/manual-charge-items', getAllManualChargeItemsHandler);
 router.get('/staff', getAllStaffHandler);
 router.get('/staff/:id', getStaffByIdHandler);
 router.get('/doctors', getAllDoctorsHandler);
-// router.get('/doctors/:id', getDoctorByIdHandler);
+ router.get('/doctors/:id', getDoctorByIdHandler);
 router.post('/referral-partners', createReferralPartnerHandler);
 router.get('/referral-partners', getAllReferralPartnersHandler);
 router.post('/operation-theaters', createOperationTheaterHandler);

@@ -73,73 +73,90 @@ exports.getSchedulesByPatient = async (req, res) => {
 };
 
 
-// exports.updateProcedureStatus = async (req, res) => {
-//     try {
-//         const { id } = req.params;
-//         const { status } = req.body;
+exports.updateProcedureStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
 
-//         if (!['Scheduled', 'In Progress', 'Completed', 'Cancelled'].includes(status)) {
-//             return res.status(400).json({ message: 'Invalid status.' });
-//         }
+        if (!['Scheduled', 'In Progress', 'Completed', 'Cancelled'].includes(status)) {
+            return res.status(400).json({ message: 'Invalid status.' });
+        }
 
-//         const procedure = await ProcedureSchedule.findById(id);
-//         if (!procedure) return res.status(404).json({ message: 'Procedure not found.' });
+        const procedure = await ProcedureSchedule.findById(id);
+        if (!procedure) return res.status(404).json({ message: 'Procedure not found.' });
 
-//         procedure.status = status;
-//         await procedure.save();
+        procedure.status = status;
+        await procedure.save();
 
-//         res.status(200).json({ message: 'Procedure status updated.', procedure });
+        res.status(200).json({ message: 'Procedure status updated.', procedure });
 
-//     } catch (error) {
-//         res.status(500).json({ message: 'Server error.' });
-//     }
-// };
+    } catch (error) {
+        res.status(500).json({ message: 'Server error.' });
+    }
+};
 
 
 exports.createAnesthesiaRecord = async (req, res) => {
+  try {
+    const {
+      patientId,
+      ipdAdmissionId,
+      anestheticId,
+      anesthesiaName,
+      anesthesiaType,
+      induceTime,
+      endTime,
+      medicinesUsedText,
+          procedureType 
+    } = req.body;
 
-    try {
-        const {
-            procedureScheduleId, anestheticId, anesthesiaName,
-            anesthesiaType, induceTime, endTime, medicinesUsedText
-        } = req.body;
-
-        if (!procedureScheduleId || !anestheticId || !anesthesiaName || !anesthesiaType) {
-            return res.status(400).json({ message: 'Missing required anesthesia fields.' });
-        }
-
-        const record = new AnesthesiaRecord({
-            procedureScheduleId, anestheticId, anesthesiaName,
-            anesthesiaType, induceTime, endTime, medicinesUsedText
-        });
-
-        await record.save();
-        res.status(201).json({ message: 'Anesthesia record created.', record });
-
-    } catch (error) {
-        res.status(500).json({ message: 'Server error.' });
+    if (!patientId || !anestheticId || !anesthesiaName || !anesthesiaType) {
+      return res.status(400).json({ message: 'Missing required fields.' });
     }
+
+    const record = new AnesthesiaRecord({
+      patientId,          // ✅ SAVED
+      ipdAdmissionId,     // ✅ SAVED
+      anestheticId,
+      anesthesiaName,
+      anesthesiaType,
+      induceTime,
+      endTime,
+      medicinesUsedText,
+        procedureType 
+    });
+
+    await record.save();
+
+    res.status(201).json({ message: 'Anesthesia record created.', record });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error.' });
+  }
 };
 
 
-exports.getAnesthesiaRecord = async (req, res) => {
-    try {
-        const { procedureScheduleId } = req.params;
-        const record = await AnesthesiaRecord.findOne({ procedureScheduleId }).populate({
-    path: 'anestheticId',
-    populate: {
-      path: 'userId',
-      select: 'name'
-    }
-})
+exports.getAllAnesthesiaRecords = async (req, res) => {
+  try {
+    const records = await AnesthesiaRecord.find()
+      .populate({
+        path: "patientId",
+        select: "fullName"
+      })
+      .populate({
+        path: "anestheticId",
+        populate: { path: "userId", select: "name" }
+      });
 
-        if (!record) return res.status(404).json({ message: 'No record found.' });
-        res.status(200).json({ record });
-
-    } catch (error) {
-        res.status(500).json({ message: 'Server error.' });
-    }
+    return res.status(200).json({ records });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error." });
+  }
 };
+
+
 
 exports.createLabourRoomDetail = async (req, res) => {
 

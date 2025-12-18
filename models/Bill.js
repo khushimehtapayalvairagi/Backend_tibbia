@@ -11,7 +11,7 @@ const BillItemSchema = new mongoose.Schema({
 
 const BillSchema = new mongoose.Schema({
   patient_id_ref: { type: mongoose.Schema.Types.ObjectId, ref: 'Patient', required: true },
-  // visit_id_ref: { type: mongoose.Schema.Types.ObjectId, ref: 'Visit' },
+  visit_id_ref: { type: mongoose.Schema.Types.ObjectId, ref: 'Visit' },
   ipd_admission_id_ref: { type: mongoose.Schema.Types.ObjectId, ref: 'IPDAdmission' },
   bill_date: { type: Date, default: Date.now },
   items: { type: [BillItemSchema], required: true },

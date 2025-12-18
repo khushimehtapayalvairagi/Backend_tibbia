@@ -4,14 +4,16 @@ const cookieParser = require('cookie-parser');
 const { connectDB } = require('./utils/config');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const { setupSocket } = require('./utils/sockets');
+
 const { restrictToLoggedInUserOnly, restrictTo, restrictToDesignation } = require('./middlewares/auth');
 dotenv.config();
 
-const PORT = process.env.PORT || 9000;
+const PORT = process.env.PORT || 8001;
 const app = express();
 const server = http.createServer(app); 
 
-// setupSocket(server); 
+ setupSocket(server); 
 
 app.use(express.json());
 app.use(cookieParser());
@@ -19,10 +21,10 @@ app.use(cookieParser());
 app.use(
   cors({
     // origin: ["https://uudra.in", "http://localhost:3000"],
-        origin: ["http://localhost:3001","http://localhost:3000"],
+        // origin: ["http://localhost:3000"],
           // origin: ["https://kloudcrm.site", "http://kloudcrm.site", "https://www.kloudcrm.site"],
-      //      origin: [ "https://tibbia.kloudcrm.site",  // ✅ Add this line
-      // "http://tibbia.kloudcrm.site" ],
+           origin: [ "https://tibbia.kloudcrm.site",  // ✅ Add this line
+      "http://tibbia.kloudcrm.site" ],
 
         credentials: true,
   })
@@ -33,7 +35,7 @@ app.use(
 const AuthHandler = require('./routes/auth');
 const AdminHandler = require('./routes/admin');
 const ReceptionistHandler = require('./routes/receptionist');
-// const doctorHandler = require('./routes/doctor');
+ const doctorHandler = require('./routes/doctor');
 const ipdHandler = require('./routes/ipd');
 const procedure = require('./routes/procedure');
 const inventoryManager = require('./routes/inventoryManager');
@@ -63,7 +65,7 @@ app.use('/api/billing', restrictToLoggedInUserOnly, restrictTo(['ADMIN', 'RECEPT
 app.use('/api/admin', restrictToLoggedInUserOnly, restrictTo(['ADMIN',"STAFF"]), bulkUpload);
 app.use('/api/admin',restrictToLoggedInUserOnly,restrictTo(['ADMIN']),AdminHandler);
 app.use('/api/receptionist',restrictToLoggedInUserOnly, restrictTo(['ADMIN', 'STAFF']),restrictToDesignation(['Receptionist',"Head Nurse","Lab Technician"]),ReceptionistHandler);
-// app.use('/api/doctor', restrictToLoggedInUserOnly,restrictTo(['ADMIN', 'DOCTOR']),doctorHandler);
+app.use('/api/doctor', restrictToLoggedInUserOnly,restrictTo(['ADMIN', 'DOCTOR']),doctorHandler);
 app.use('/api/ipd', restrictToLoggedInUserOnly,restrictTo(['ADMIN', 'DOCTOR', 'STAFF']), restrictToDesignation(['Receptionist', 'Head Nurse']),ipdHandler);
 app.use('/api/procedures',restrictToLoggedInUserOnly, restrictTo(['ADMIN', 'DOCTOR', 'STAFF']), restrictToDesignation(['Receptionist', 'Head Nurse']),procedure);
 app.use('/api/inventory',restrictToLoggedInUserOnly,restrictTo(['ADMIN', 'STAFF']),restrictToDesignation(['Inventory Manager']),inventoryManager);

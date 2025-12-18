@@ -518,11 +518,12 @@ exports.bulkUploadDoctors = async (req, res) => {
       const row = data[i];
       const rowNum = i + 2;
 
-      let { name, email, password, doctorType, specialty, department, medicalLicenseNumber } = row;
+      let { name, email, password,role,doctorType, specialty, department, medicalLicenseNumber } = row;
 
       name = String(name || "").trim();
       email = String(email || "").trim();
       password = String(password || "").trim();
+       role = String(role || "").trim();
       doctorType = String(doctorType || "").trim();
       specialty = String(specialty || "").trim();
       department = String(department || "").trim();

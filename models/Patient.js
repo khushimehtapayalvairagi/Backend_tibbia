@@ -19,6 +19,11 @@ const PatientSchema = new mongoose.Schema({
   contactNumber: { type: String, required: false },
   email: { type: String, required: false },
   address: { type: String, required: true },
+ abhaNumber: {
+  type: String,
+  unique: true,
+  sparse: true // ✅ allows multiple null/undefined values
+},
   aadhaarNumber: { type: String, unique: true, sparse: true }, // optional & unique
   relatives: { type: [RelativeSchema], validate: [relativesLimit, 'Maximum 3 relatives allowed'], required: false },
   status: { type: String, enum: ['Inactive','Active'], default: 'Inactive' }
