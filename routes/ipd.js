@@ -7,5 +7,6 @@ router.get('/admissions/:patientId', ipdController.getIPDAdmissionsByPatient);
 router.put('/admissions/:id/discharge', ipdController.dischargeIPDAdmission);
 router.post('/reports', ipdController.createDailyProgressReport);
 router.get('/reports', ipdController.getDailyReportsByAdmission);
+router.get('/admissions/current-count', getAdmittedPatientsCount);
 
 module.exports = router;

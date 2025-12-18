@@ -190,6 +190,10 @@ exports.createIPDAdmission = async (req, res) => {
     res.status(500).json({ message: "Server error." });
   }
 };
+exports.getAdmittedPatientsCount = async (req, res) => {
+  const count = await IPDAdmission.countDocuments({ status: "Admitted" });
+  res.json({ totalAdmitted: count });
+};
 
 
 exports.getIPDAdmissionsByPatient = async (req, res) => {

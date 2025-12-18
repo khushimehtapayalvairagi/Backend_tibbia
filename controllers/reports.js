@@ -504,7 +504,10 @@ if (delivery_type) {
       .populate('procedureScheduleId', 'scheduledDateTime procedureType')
       .populate('capturedByUserId', 'name role');
 
-    res.status(200).json(records);
+    // res.status(200).json(records);
+    const count = await LabourRoomDetail.countDocuments(match);
+res.status(200).json({ totalBirths: count });
+
   } catch (error) {
     console.error('Birth Record Report Error:', error);
     res.status(500).json({ message: 'Error generating birth record report.' });
@@ -568,10 +571,15 @@ exports.getBillingSummaryReport = async (req, res) => {
       }
     ]);
 
+    // res.status(200).json({
+    //   summary: summary[0] || { breakdown: [], grandTotal: 0 },
+    //   paymentStatusBreakdown
+    // });
     res.status(200).json({
-      summary: summary[0] || { breakdown: [], grandTotal: 0 },
-      paymentStatusBreakdown
-    });
+  totalAmount: summary[0]?.grandTotal || 0,
+  paymentStatusBreakdown
+});
+
   } catch (error) {
     console.error('Billing Summary Error:', error);
     res.status(500).json({ message: 'Error generating billing summary report.' });
