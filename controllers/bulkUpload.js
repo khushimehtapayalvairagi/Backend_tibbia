@@ -478,6 +478,8 @@ exports.bulkUploadSpeciality = async (req, res) => {
 };
 
 // ----------- BULK UPLOAD DEPARTMENT -----------
+
+
 exports.bulkUploadDepartment = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
@@ -489,11 +491,12 @@ exports.bulkUploadDepartment = async (req, res) => {
 
     const records = [];
     const errorRows = [];
+    const duplicateNames = new Set();
 
-    let lastValidName = null; // ⭐ key fix for Excel continuation rows
+    let lastValidName = null;
 
     data.forEach((row, idx) => {
-      const rowNumber = idx + 2; // Excel row number (header + 1)
+      const rowNumber = idx + 2;
 
       const name = row.name?.trim() || lastValidName;
       const description = row.description?.trim();
@@ -514,12 +517,25 @@ exports.bulkUploadDepartment = async (req, res) => {
       });
     }
 
-    const inserted = await Department.insertMany(records);
+    let insertedCount = 0;
+
+    for (const record of records) {
+      const exists = await Department.findOne({ name: record.name });
+
+      if (exists) {
+        duplicateNames.add(record.name);
+        continue; // ✅ skip duplicate
+      }
+
+      await Department.create(record);
+      insertedCount++;
+    }
 
     res.status(200).json({
       message: "Departments uploaded successfully",
-      insertedCount: inserted.length,
-      skippedRows: errorRows
+      insertedCount,
+      skippedDuplicates: Array.from(duplicateNames),
+      invalidRows: errorRows
     });
 
   } catch (err) {
@@ -533,6 +549,7 @@ exports.bulkUploadDepartment = async (req, res) => {
     });
   }
 };
+
 
 // ----------- BULK UPLOAD DOCTORS -----------
 exports.bulkUploadDoctors = async (req, res) => {
