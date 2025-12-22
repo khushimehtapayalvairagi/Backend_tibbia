@@ -480,6 +480,8 @@ exports.bulkUploadSpeciality = async (req, res) => {
 // ----------- BULK UPLOAD DEPARTMENT -----------
 
 
+
+
 exports.bulkUploadDepartment = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
@@ -491,12 +493,11 @@ exports.bulkUploadDepartment = async (req, res) => {
 
     const records = [];
     const errorRows = [];
-    const duplicateNames = new Set();
 
-    let lastValidName = null;
+    let lastValidName = null; // ✅ carry forward department name
 
     data.forEach((row, idx) => {
-      const rowNumber = idx + 2;
+      const rowNumber = idx + 2; // Excel row number
 
       const name = row.name?.trim() || lastValidName;
       const description = row.description?.trim();
@@ -506,7 +507,11 @@ exports.bulkUploadDepartment = async (req, res) => {
         return;
       }
 
-      records.push({ name, description });
+      records.push({
+        name,
+        description
+      });
+
       lastValidName = name;
     });
 
@@ -517,31 +522,17 @@ exports.bulkUploadDepartment = async (req, res) => {
       });
     }
 
-    let insertedCount = 0;
-
-    for (const record of records) {
-      const exists = await Department.findOne({ name: record.name });
-
-      if (exists) {
-        duplicateNames.add(record.name);
-        continue; // ✅ skip duplicate
-      }
-
-      await Department.create(record);
-      insertedCount++;
-    }
+    // ✅ ordered:false → continue even if one row fails
+    await Department.insertMany(records, { ordered: false });
 
     res.status(200).json({
       message: "Departments uploaded successfully",
-      insertedCount,
-      skippedDuplicates: Array.from(duplicateNames),
+      insertedCount: records.length,
       invalidRows: errorRows
     });
 
   } catch (err) {
-    if (fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
+    fs.existsSync(req.file.path) && fs.unlinkSync(req.file.path);
 
     res.status(500).json({
       message: "Upload failed",
@@ -549,6 +540,7 @@ exports.bulkUploadDepartment = async (req, res) => {
     });
   }
 };
+
 
 
 // ----------- BULK UPLOAD DOCTORS -----------
