@@ -479,7 +479,10 @@ exports.bulkUploadSpeciality = async (req, res) => {
 
 // ----------- BULK UPLOAD DEPARTMENT -----------
 exports.bulkUploadDepartment = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
   try {
     const data = await parseFile(req.file.path);
     fs.unlinkSync(req.file.path);
@@ -487,18 +490,47 @@ exports.bulkUploadDepartment = async (req, res) => {
     const records = [];
     const errorRows = [];
 
+    let lastValidName = null; // ⭐ key fix for Excel continuation rows
+
     data.forEach((row, idx) => {
-      if (!row.name || !row.description) errorRows.push(idx + 2);
-      else records.push({ name: row.name.trim(), description: row.description.trim() });
+      const rowNumber = idx + 2; // Excel row number (header + 1)
+
+      const name = row.name?.trim() || lastValidName;
+      const description = row.description?.trim();
+
+      if (!name || !description) {
+        errorRows.push(rowNumber);
+        return;
+      }
+
+      records.push({ name, description });
+      lastValidName = name;
     });
 
-    if (errorRows.length) return res.status(400).json({ message: "Validation failed", errorRows });
+    if (!records.length) {
+      return res.status(400).json({
+        message: "No valid department records found",
+        errorRows
+      });
+    }
 
     const inserted = await Department.insertMany(records);
-    res.json({ message: "Departments uploaded successfully", insertedCount: inserted.length });
+
+    res.status(200).json({
+      message: "Departments uploaded successfully",
+      insertedCount: inserted.length,
+      skippedRows: errorRows
+    });
+
   } catch (err) {
-    fs.existsSync(req.file.path) && fs.unlinkSync(req.file.path);
-    res.status(500).json({ message: "Upload failed", error: err.message });
+    if (fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+
+    res.status(500).json({
+      message: "Upload failed",
+      error: err.message
+    });
   }
 };
 
