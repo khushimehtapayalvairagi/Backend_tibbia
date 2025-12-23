@@ -332,7 +332,8 @@ exports.bulkUploadWards = async (req, res) => {
     const row = data[i];
     const name = row.name?.trim();
     const roomCategoryName = row.roomCategory?.trim();
-    const bedsStr = row.beds?.trim(); // comma-separated bed numbers
+   const bedsStr = String(row.beds ?? "").trim();
+// comma-separated bed numbers
 
     if (!name || !roomCategoryName || !bedsStr) {
       errorRows.push(i + 2); // +2 for header row
