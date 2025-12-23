@@ -309,8 +309,12 @@ exports.bulkUploadProcedures = async (req, res) => {
   }
 };
 
+
+
 exports.bulkUploadWards = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
 
   let workbook;
   try {
@@ -324,64 +328,113 @@ exports.bulkUploadWards = async (req, res) => {
   const data = xlsx.utils.sheet_to_json(sheet, { defval: "" });
   fs.unlinkSync(req.file.path);
 
-  const errorRows = [];
+  const validationErrorRows = [];
   const wardsToInsert = [];
 
+  // ------------------ VALIDATION & DATA BUILD ------------------
   for (let i = 0; i < data.length; i++) {
-    const rowNum = i + 2;
+    const excelRow = i + 2;
     const row = data[i];
 
-    const name = String(row.name ?? "").trim();
-    const roomCategoryName = String(row.roomCategory ?? "").trim();
-    const bedsStr = String(row.beds ?? "").trim();
+    const name = String(row.name || '').trim();
+    const roomCategoryName = String(row.roomCategory || '').trim();
+    const bedsStr = String(row.beds || '').trim();
 
     if (!name || !roomCategoryName || !bedsStr) {
-      errorRows.push(rowNum);
+      validationErrorRows.push(excelRow);
       continue;
     }
 
-    // find category by name OR description
-    const roomCategoryData = await RoomCategory.findOne({
+    const roomCategory = await RoomCategory.findOne({
       $or: [
         { name: roomCategoryName },
         { description: roomCategoryName }
       ]
     });
 
-    if (!roomCategoryData) {
-      errorRows.push(rowNum);
+    if (!roomCategory) {
+      validationErrorRows.push(excelRow);
       continue;
     }
 
-    // parse beds
-    let bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
+    const bedNumbers = bedsStr
+      .split(',')
+      .map(b => b.trim())
+      .filter(Boolean);
+
     if (bedNumbers.length === 0) {
-      errorRows.push(rowNum);
+      validationErrorRows.push(excelRow);
       continue;
     }
 
     const beds = bedNumbers.map(bedNumber => ({
       bedNumber,
-      status: "available"
+      status: 'available'
     }));
 
     wardsToInsert.push({
       name,
-      roomCategory: roomCategoryData._id,
-      beds
+      roomCategory: roomCategory._id,
+      beds,
+      _excelRow: excelRow // keep for reporting
     });
   }
 
-  if (errorRows.length > 0)
-    return res.status(400).json({ message: "Validation failed at rows", errorRows });
+  if (validationErrorRows.length > 0) {
+    return res.status(400).json({
+      message: "Validation failed at rows",
+      errorRows: validationErrorRows
+    });
+  }
 
+  // ------------------ DUPLICATE CHECK ------------------
   try {
-    await Ward.insertMany(wardsToInsert);
-    res.json({ message: "Wards uploaded successfully", count: wardsToInsert.length });
+    const existingWards = await Ward.find(
+      { name: { $in: wardsToInsert.map(w => w.name) } },
+      { name: 1 }
+    );
+
+    const existingNames = new Set(existingWards.map(w => w.name));
+
+    const duplicates = [];
+    const finalInsert = [];
+
+    wardsToInsert.forEach(w => {
+      if (existingNames.has(w.name)) {
+        duplicates.push(w._excelRow);
+      } else {
+        finalInsert.push({
+          name: w.name,
+          roomCategory: w.roomCategory,
+          beds: w.beds
+        });
+      }
+    });
+
+    if (finalInsert.length === 0) {
+      return res.status(400).json({
+        message: "All wards already exist",
+        duplicateRows: duplicates
+      });
+    }
+
+    await Ward.insertMany(finalInsert);
+
+    return res.json({
+      message: "Wards uploaded successfully",
+      inserted: finalInsert.length,
+      skippedDuplicates: duplicates.length,
+      duplicateRows: duplicates
+    });
+
   } catch (err) {
-    res.status(500).json({ message: "Upload failed", error: err.message });
+    return res.status(500).json({
+      message: "Upload failed",
+      error: err.message
+    });
   }
 };
+
 
 
 
