@@ -321,119 +321,81 @@ exports.bulkUploadWards = async (req, res) => {
     workbook = xlsx.readFile(req.file.path);
   } catch (err) {
     fs.unlinkSync(req.file.path);
-    return res.status(400).json({ message: "Invalid Excel file", error: err.message });
+    return res.status(400).json({ message: "Invalid Excel file" });
   }
 
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const data = xlsx.utils.sheet_to_json(sheet, { defval: "" });
   fs.unlinkSync(req.file.path);
 
-  const validationErrorRows = [];
+  const errorRows = [];
   const wardsToInsert = [];
 
-  // ------------------ VALIDATION & DATA BUILD ------------------
   for (let i = 0; i < data.length; i++) {
     const excelRow = i + 2;
     const row = data[i];
 
-    const name = String(row.name || '').trim();
-    const roomCategoryName = String(row.roomCategory || '').trim();
-    const bedsStr = String(row.beds || '').trim();
+    const name = String(row.name || "").trim();
+    const roomCategoryName = String(row.roomCategory || "").trim();
+    const bedsStr = String(row.beds || "").trim();
 
     if (!name || !roomCategoryName || !bedsStr) {
-      validationErrorRows.push(excelRow);
+      errorRows.push(excelRow);
       continue;
     }
 
     const roomCategory = await RoomCategory.findOne({
-      $or: [
-        { name: roomCategoryName },
-        { description: roomCategoryName }
-      ]
+      $or: [{ name: roomCategoryName }, { description: roomCategoryName }]
     });
 
     if (!roomCategory) {
-      validationErrorRows.push(excelRow);
+      errorRows.push(excelRow);
       continue;
     }
 
     const bedNumbers = bedsStr
-      .split(',')
+      .split(",")
       .map(b => b.trim())
       .filter(Boolean);
 
-    if (bedNumbers.length === 0) {
-      validationErrorRows.push(excelRow);
+    if (!bedNumbers.length) {
+      errorRows.push(excelRow);
       continue;
     }
 
-    const beds = bedNumbers.map(bedNumber => ({
-      bedNumber,
-      status: 'available'
+    const beds = bedNumbers.map(b => ({
+      bedNumber: b,
+      status: "available"
     }));
 
     wardsToInsert.push({
       name,
       roomCategory: roomCategory._id,
-      beds,
-      _excelRow: excelRow // keep for reporting
+      beds
     });
   }
 
-  if (validationErrorRows.length > 0) {
+  if (errorRows.length > 0) {
     return res.status(400).json({
       message: "Validation failed at rows",
-      errorRows: validationErrorRows
+      errorRows
     });
   }
 
-  // ------------------ DUPLICATE CHECK ------------------
   try {
-    const existingWards = await Ward.find(
-      { name: { $in: wardsToInsert.map(w => w.name) } },
-      { name: 1 }
-    );
-
-    const existingNames = new Set(existingWards.map(w => w.name));
-
-    const duplicates = [];
-    const finalInsert = [];
-
-    wardsToInsert.forEach(w => {
-      if (existingNames.has(w.name)) {
-        duplicates.push(w._excelRow);
-      } else {
-        finalInsert.push({
-          name: w.name,
-          roomCategory: w.roomCategory,
-          beds: w.beds
-        });
-      }
-    });
-
-    if (finalInsert.length === 0) {
-      return res.status(400).json({
-        message: "All wards already exist",
-        duplicateRows: duplicates
-      });
-    }
-
-    await Ward.insertMany(finalInsert);
-
-    return res.json({
+    await Ward.insertMany(wardsToInsert, { ordered: true }); // insert ALL
+    res.json({
       message: "Wards uploaded successfully",
-      inserted: finalInsert.length,
-      skippedDuplicates: duplicates.length,
-      duplicateRows: duplicates
+      count: wardsToInsert.length
     });
-
   } catch (err) {
-    return res.status(500).json({
+    res.status(500).json({
       message: "Upload failed",
       error: err.message
     });
   }
 };
+
 
 
 
