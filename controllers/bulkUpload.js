@@ -205,8 +205,7 @@ exports.bulkUploadReferralPartnersHandler = async (req, res) => {
 };
 
 
-
-exports. bulkUploadManualChargeItemsHandler = async (req, res) => {
+exports.bulkUploadManualChargeItemsHandler = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Excel file is required" });
 
@@ -215,35 +214,54 @@ exports. bulkUploadManualChargeItemsHandler = async (req, res) => {
     const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
     const errorRows = [];
+
     for (let i = 0; i < data.length; i++) {
       const { itemName, category, defaultPrice, description } = data[i];
 
-    if (!itemName || !category || defaultPrice === undefined || defaultPrice === null || defaultPrice === '') {
-  
-  continue;
-}
+      // Skip rows with missing required fields
+      if (!itemName || !category || defaultPrice === undefined || defaultPrice === null || defaultPrice === '') {
+        continue;
+      }
 
+      // Normalize price: remove commas
+      let price = defaultPrice;
+      if (typeof price === "string") {
+        price = price.replace(/,/g, "").trim();
+      }
+      const numericPrice = Number(price);
 
-      const exists = await ManualChargeItem.findOne({ itemName });
-      if (exists) {
+      if (isNaN(numericPrice)) {
         errorRows.push(i + 2);
         continue;
       }
 
-      const newItem = new ManualChargeItem({ itemName, category, defaultPrice, description });
-      await newItem.save();
+      // SKIP duplicates without error
+      const exists = await ManualChargeItem.findOne({ itemName });
+      if (exists) {
+        continue;
+      }
+
+      // Save
+      await new ManualChargeItem({
+        itemName,
+        category,
+        defaultPrice: numericPrice,
+        description: description || ""
+      }).save();
     }
 
     if (errorRows.length > 0) {
       return res.status(400).json({ message: "Some rows failed", errorRows });
     }
 
-    res.status(200).json({ message: "Bulk upload successful!" });
+    return res.status(200).json({ message: "Bulk upload successful!" });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 exports.bulkUploadProcedures = async (req, res) => {
