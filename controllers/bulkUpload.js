@@ -309,7 +309,6 @@ exports.bulkUploadProcedures = async (req, res) => {
   }
 };
 
-
 exports.bulkUploadWards = async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -329,30 +328,42 @@ exports.bulkUploadWards = async (req, res) => {
   const wardsToInsert = [];
 
   for (let i = 0; i < data.length; i++) {
+    const rowNum = i + 2;
     const row = data[i];
-    const name = row.name?.trim();
-    const roomCategoryName = row.roomCategory?.trim();
-   const bedsStr = String(row.beds ?? "").trim();
-// comma-separated bed numbers
+
+    const name = String(row.name ?? "").trim();
+    const roomCategoryName = String(row.roomCategory ?? "").trim();
+    const bedsStr = String(row.beds ?? "").trim();
 
     if (!name || !roomCategoryName || !bedsStr) {
-      errorRows.push(i + 2); // +2 for header row
+      errorRows.push(rowNum);
       continue;
     }
 
-    const roomCategoryData = await RoomCategory.findOne({ name: roomCategoryName });
+    // find category by name OR description
+    const roomCategoryData = await RoomCategory.findOne({
+      $or: [
+        { name: roomCategoryName },
+        { description: roomCategoryName }
+      ]
+    });
+
     if (!roomCategoryData) {
-      errorRows.push(i + 2);
+      errorRows.push(rowNum);
       continue;
     }
 
-    const bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
+    // parse beds
+    let bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
     if (bedNumbers.length === 0) {
-      errorRows.push(i + 2);
+      errorRows.push(rowNum);
       continue;
     }
 
-    const beds = bedNumbers.map(bedNumber => ({ bedNumber, status: 'available' }));
+    const beds = bedNumbers.map(bedNumber => ({
+      bedNumber,
+      status: "available"
+    }));
 
     wardsToInsert.push({
       name,
@@ -371,6 +382,7 @@ exports.bulkUploadWards = async (req, res) => {
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
+
 
 
 
