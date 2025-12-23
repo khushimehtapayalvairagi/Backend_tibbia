@@ -324,6 +324,7 @@ exports.bulkUploadWards = async (req, res) => {
 
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const data = xlsx.utils.sheet_to_json(sheet, { defval: "" });
+
   fs.unlinkSync(req.file.path);
 
   const errorRows = [];
@@ -342,14 +343,13 @@ exports.bulkUploadWards = async (req, res) => {
       continue;
     }
 
-    /* ---------- ROOM CATEGORY (AUTO CREATE) ---------- */
+    // find or create room category
     let roomCategory = await RoomCategory.findOne({
       $or: [
         { name: new RegExp("^" + roomCategoryName + "$", "i") },
         { description: new RegExp("^" + roomCategoryName + "$", "i") }
       ]
     });
-
     if (!roomCategory) {
       roomCategory = await RoomCategory.create({
         name: roomCategoryName,
@@ -357,19 +357,16 @@ exports.bulkUploadWards = async (req, res) => {
       });
     }
 
-    /* ---------- BED PARSING ---------- */
+    // parse beds range
     let bedNumbers = [];
     const rangeMatch = bedsStr.match(/^(\d+)\s*to\s*(\d+)$/i);
-
     if (rangeMatch) {
       const start = Number(rangeMatch[1]);
       const end = Number(rangeMatch[2]);
-
       if (isNaN(start) || isNaN(end) || start > end) {
         errorRows.push(rowNum);
         continue;
       }
-
       for (let b = start; b <= end; b++) {
         bedNumbers.push(String(b));
       }
@@ -379,7 +376,6 @@ exports.bulkUploadWards = async (req, res) => {
         .map(b => b.trim())
         .filter(Boolean);
     }
-
     if (!bedNumbers.length) {
       errorRows.push(rowNum);
       continue;
@@ -390,10 +386,13 @@ exports.bulkUploadWards = async (req, res) => {
       status: "available"
     }));
 
-    /* ---------- UPSERT WARD + MERGE BEDS ---------- */
+    // IMPORTANT: use BOTH name + category in filter
     bulkOps.push({
       updateOne: {
-        filter: { name },
+        filter: {
+          name,
+          roomCategory: roomCategory._id
+        },
         update: {
           $setOnInsert: {
             name,
@@ -427,6 +426,7 @@ exports.bulkUploadWards = async (req, res) => {
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
+
 
 
 
