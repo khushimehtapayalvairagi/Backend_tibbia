@@ -309,126 +309,68 @@ exports.bulkUploadProcedures = async (req, res) => {
   }
 };
 
+
 exports.bulkUploadWards = async (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ message: "No file uploaded" });
-  }
+  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
   let workbook;
   try {
     workbook = xlsx.readFile(req.file.path);
   } catch (err) {
     fs.unlinkSync(req.file.path);
-    return res.status(400).json({ message: "Invalid Excel file" });
+    return res.status(400).json({ message: "Invalid Excel file", error: err.message });
   }
 
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const data = xlsx.utils.sheet_to_json(sheet, { defval: "" });
-
   fs.unlinkSync(req.file.path);
 
   const errorRows = [];
-  const bulkOps = [];
+  const wardsToInsert = [];
 
   for (let i = 0; i < data.length; i++) {
-    const rowNum = i + 2;
     const row = data[i];
-
-    const name = String(row.name ?? "").trim();
-    const roomCategoryName = String(row.roomCategory ?? "").trim();
-    const bedsStr = String(row.beds ?? "").trim();
+    const name = row.name?.trim();
+    const roomCategoryName = row.roomCategory?.trim();
+   const bedsStr = String(row.beds ?? "").trim();
+// comma-separated bed numbers
 
     if (!name || !roomCategoryName || !bedsStr) {
-      errorRows.push(rowNum);
+      errorRows.push(i + 2); // +2 for header row
       continue;
     }
 
-    // find or create room category
-    let roomCategory = await RoomCategory.findOne({
-      $or: [
-        { name: new RegExp("^" + roomCategoryName + "$", "i") },
-        { description: new RegExp("^" + roomCategoryName + "$", "i") }
-      ]
-    });
-    if (!roomCategory) {
-      roomCategory = await RoomCategory.create({
-        name: roomCategoryName,
-        description: roomCategoryName
-      });
-    }
-
-    // parse beds range
-    let bedNumbers = [];
-    const rangeMatch = bedsStr.match(/^(\d+)\s*to\s*(\d+)$/i);
-    if (rangeMatch) {
-      const start = Number(rangeMatch[1]);
-      const end = Number(rangeMatch[2]);
-      if (isNaN(start) || isNaN(end) || start > end) {
-        errorRows.push(rowNum);
-        continue;
-      }
-      for (let b = start; b <= end; b++) {
-        bedNumbers.push(String(b));
-      }
-    } else {
-      bedNumbers = bedsStr
-        .split(",")
-        .map(b => b.trim())
-        .filter(Boolean);
-    }
-    if (!bedNumbers.length) {
-      errorRows.push(rowNum);
+    const roomCategoryData = await RoomCategory.findOne({ name: roomCategoryName });
+    if (!roomCategoryData) {
+      errorRows.push(i + 2);
       continue;
     }
 
-    const beds = bedNumbers.map(b => ({
-      bedNumber: b,
-      status: "available"
-    }));
+    const bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
+    if (bedNumbers.length === 0) {
+      errorRows.push(i + 2);
+      continue;
+    }
 
-    // IMPORTANT: use BOTH name + category in filter
-    bulkOps.push({
-      updateOne: {
-        filter: {
-          name,
-          roomCategory: roomCategory._id
-        },
-        update: {
-          $setOnInsert: {
-            name,
-            roomCategory: roomCategory._id
-          },
-          $addToSet: {
-            beds: { $each: beds }
-          }
-        },
-        upsert: true
-      }
+    const beds = bedNumbers.map(bedNumber => ({ bedNumber, status: 'available' }));
+
+    wardsToInsert.push({
+      name,
+      roomCategory: roomCategoryData._id,
+      beds
     });
   }
 
-  if (errorRows.length) {
-    return res.status(400).json({
-      message: "Validation failed at rows",
-      errorRows
-    });
-  }
+  if (errorRows.length > 0)
+    return res.status(400).json({ message: "Validation failed at rows", errorRows });
 
   try {
-    const result = await Ward.bulkWrite(bulkOps);
-    res.json({
-      message: "Wards uploaded successfully",
-      inserted: result.upsertedCount,
-      updated: result.modifiedCount
-    });
+    await Ward.insertMany(wardsToInsert);
+    res.json({ message: "Wards uploaded successfully", count: wardsToInsert.length });
   } catch (err) {
-    console.error("Bulk upload error:", err);
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
-
-
-
 
 
 
