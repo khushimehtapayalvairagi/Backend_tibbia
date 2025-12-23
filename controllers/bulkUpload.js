@@ -26,14 +26,22 @@ const InventoryItem = require("../models/InventoryItems"); // adjust path
 
 // Bulk Upload Inventory Items
 exports.bulkUploadInventory = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
 
   try {
     const data = await parseFile(req.file.path);
     fs.unlinkSync(req.file.path);
 
-    if (!data.length)
+    if (!data.length) {
       return res.status(400).json({ message: "File is empty" });
+    }
+
+    const clean = (val) =>
+      typeof val === "string"
+        ? val.replace(/\r?\n|\r/g, " ").trim()
+        : val;
 
     const errorRows = [];
     const insertedItems = [];
@@ -42,56 +50,67 @@ exports.bulkUploadInventory = async (req, res) => {
       const row = data[i];
       const rowNum = i + 2;
 
-      const {
-        itemName,
-        itemCode,
-        category,
-        unitOfMeasurement,
-        minStockLevel,
-        maxStockLevel,
-        supplierName,
-        supplierContact,
-        currentStock,
-      } = row;
+      const itemName = clean(row.itemName);
+      const category = clean(row.category);
+      const unitOfMeasurement = clean(row.unitOfMeasurement);
+      const supplierName = clean(row.supplierName);
+      const supplierContact = clean(row.supplierContact || row.supplierCo);
 
-      if (
-        !itemName ||
-        !itemCode ||
-        !category ||
-        !unitOfMeasurement ||
-        !minStockLevel ||
-        !maxStockLevel ||
-        !supplierName ||
-        !supplierContact
-      ) {
+      // ✅ Auto-generate itemCode
+      const itemCode =
+        clean(row.itemCode) ||
+        `ITEM-${itemName?.substring(0, 6).toUpperCase()}-${Date.now()}-${i}`;
+
+      const minStockLevel =
+        row.minStockLevel !== undefined && row.minStockLevel !== ""
+          ? Number(row.minStockLevel)
+          : 0;
+
+      const maxStockLevel =
+        row.maxStockLevel !== undefined && row.maxStockLevel !== ""
+          ? Number(row.maxStockLevel)
+          : 0;
+
+      // ✅ Only strict required fields
+      if (!itemName || !category || !unitOfMeasurement || !supplierName || !supplierContact) {
         errorRows.push(rowNum);
         continue;
       }
 
-      // Check for duplicate itemCode
-      const existing = await InventoryItem.findOne({ itemCode: String(itemCode).trim() });
+      // ✅ Check duplicate itemCode
+      const existing = await InventoryItem.findOne({
+        itemCode: itemCode,
+      });
+
       if (existing) {
         errorRows.push(rowNum);
         continue;
       }
 
       insertedItems.push({
-        itemName: String(itemName).trim(),
-        itemCode: String(itemCode).trim(),
-        category: String(category).trim(),
-        unitOfMeasurement: String(unitOfMeasurement).trim(),
-        minStockLevel: Number(minStockLevel),
-        maxStockLevel: Number(maxStockLevel),
+        itemName,
+        itemCode,
+        category,
+        unitOfMeasurement,
+        minStockLevel,
+        maxStockLevel,
         supplierInfo: {
-          name: String(supplierName).trim(),
-          contact: String(supplierContact).trim(),
+          name: supplierName,
+          contact: String(supplierContact),
         },
-        currentStock: currentStock ? Number(currentStock) : 0,
+        currentStock:
+          row.currentStock !== undefined && row.currentStock !== ""
+            ? Number(row.currentStock)
+            : 0,
       });
     }
 
-    if (!insertedItems.length)
-      return res.status(400).json({ message: "No valid rows to upload", errorRows });
+    if (!insertedItems.length) {
+      return res.status(400).json({
+        message: "No valid rows to upload",
+        errorRows,
+      });
+    }
 
     await InventoryItem.insertMany(insertedItems);
 
@@ -101,9 +120,13 @@ exports.bulkUploadInventory = async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk upload error:", error);
-    res.status(500).json({ message: "Upload failed", error: error.message });
+    res.status(500).json({
+      message: "Upload failed",
+      error: error.message,
+    });
   }
 };
+
 
 // ✅ Bulk upload Operation Theaters
 exports.bulkUploadOperationTheatersHandler = async (req, res) => {
