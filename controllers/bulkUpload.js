@@ -340,11 +340,13 @@ exports.bulkUploadWards = async (req, res) => {
       continue;
     }
 
-  const roomCategoryData =
+ const roomCategoryData =
   await RoomCategory.findOne({
     $or: [
-      { name: roomCategoryName },
-      { description: roomCategoryName }
+      { name: { $regex: new RegExp("^" + roomCategoryName + "$", "i") } },
+      { description: { $regex: new RegExp("^" + roomCategoryName + "$", "i") } },
+      { name: { $regex: new RegExp(roomCategoryName, "i") } },
+      { description: { $regex: new RegExp(roomCategoryName, "i") } }
     ]
   });
 
