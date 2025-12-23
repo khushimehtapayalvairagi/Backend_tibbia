@@ -1,14 +1,25 @@
 const mongoose = require('mongoose');
 
 const BedSchema = new mongoose.Schema({
-    bedNumber: { type: String, required: true},
-    status: { type: String, enum: ['available', 'occupied', 'cleaning'], default: 'available' }
+  bedNumber: { type: String, required: true },
+  status: {
+    type: String,
+    enum: ['available', 'occupied', 'cleaning'],
+    default: 'available'
+  }
 });
 
 const WardSchema = new mongoose.Schema({
-    name: { type: String, required: true, unique: true },
-    roomCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
-    beds: [BedSchema]
+  name: { type: String, required: true },
+  roomCategory: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Room',
+    required: true
+  },
+  beds: [BedSchema]
 });
+
+/* ✅ COMPOSITE UNIQUE KEY */
+WardSchema.index({ name: 1, roomCategory: 1 }, { unique: true });
 
 module.exports = mongoose.model('Ward', WardSchema);
