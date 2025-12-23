@@ -340,11 +340,14 @@ exports.bulkUploadWards = async (req, res) => {
       continue;
     }
 
-    const roomCategoryData = await RoomCategory.findOne({ name: roomCategoryName });
-    if (!roomCategoryData) {
-      errorRows.push(i + 2);
-      continue;
-    }
+  const roomCategoryData =
+  await RoomCategory.findOne({
+    $or: [
+      { name: roomCategoryName },
+      { description: roomCategoryName }
+    ]
+  });
+
 
     const bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
     if (bedNumbers.length === 0) {
