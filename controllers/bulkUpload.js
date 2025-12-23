@@ -288,7 +288,8 @@ exports.bulkUploadProcedures = async (req, res) => {
     const description = row.description?.trim();
     const cost = Number(row.cost);
 
-    if (!name || !description || !cost || isNaN(cost)) {
+   if (!name || !description || typeof row.cost === "undefined" || row.cost === null || row.cost === "" || isNaN(cost)) {
+
       errorRows.push(i + 2); // +2 for header row
       continue;
     }
