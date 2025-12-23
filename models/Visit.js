@@ -58,12 +58,12 @@ const VisitSchema = new mongoose.Schema({
 
     referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'ReferralPartner' },
    // models/Visit.js
-// receiptNumber: {
-//   type: String,
-//   unique: true,
-//   sparse: true,   // 🔥 THIS IS MANDATORY
-//   default: undefined
-// },
+receiptNumber: {
+  type: String,
+  unique: true,
+  sparse: true,   // 🔥 THIS IS MANDATORY
+  default: undefined
+},
 
     payment: {
         amount: { type: Number },

@@ -259,93 +259,79 @@ const getAvailableDoctorsHandler = async (req, res) => {
 //     res.status(500).json({ message: "Error creating visit" });
 //   }
 // };
-
+const generateReceiptNumber = () => {
+  return `OPD-${Date.now()}`;
+};
 
 const createVisitHandler = async (req, res) => {
-    try {
-        const { patientId, visitType, referredBy, assignedDoctorId, payment } = req.body;
-        // console.log(assignedDoctorId);
-        if (!patientId || !visitType || !assignedDoctorId) {
-            return res.status(400).json({ message: 'patientId, visitType, and assignedDoctorId are required.' });
-        }
+  try {
+    const { patientId, visitType, referredBy, assignedDoctorId, payment } = req.body;
 
-      
-        if (visitType === 'OPD') {
-            if (!payment || typeof payment.amount !== 'number' || payment.amount <= 0 || payment.isPaid !== true) {
-                return res.status(400).json({ message: 'Valid payment details are required for OPD visits and payment must be marked as paid.' });
-            }
-        }
+    if (!patientId || !visitType || !assignedDoctorId) {
+      return res.status(400).json({
+        message: 'patientId, visitType, and assignedDoctorId are required.'
+      });
+    }
 
-        const patient = await Patient.findOne({ patientId: patientId.trim() });
-        if (!patient) {
-            return res.status(404).json({ message: 'Patient not found.' });
-        }
-        const doctor = await Doctor.findOne({_id: assignedDoctorId}).populate('userId','name');
-        let referralPartnerId = null;
-
-       
-// IPD Referral
-if (visitType === 'IPD_Referral') {
-    if (!referredBy) {
+    if (visitType === 'OPD') {
+      if (!payment || payment.amount <= 0 || payment.isPaid !== true) {
         return res.status(400).json({
-            message: 'Referral Partner is required for IPD_Referral visits.'
+          message: 'Valid OPD payment is required.'
         });
+      }
     }
 
-    const referralPartner = await ReferralPartner.findById(referredBy);
-    if (!referralPartner) {
-        return res.status(404).json({
-            message: 'Referral Partner not found.'
-        });
+    const patient = await Patient.findOne({ patientId: patientId.trim() });
+    if (!patient) {
+      return res.status(404).json({ message: 'Patient not found.' });
     }
 
-    referralPartnerId = referralPartner._id;
-}
+    const doctor = await Doctor.findById(assignedDoctorId).populate('userId', 'name');
 
-// OPD / IPD Admission (optional referral)
-if ((visitType === 'OPD' || visitType === 'IPD_Admission') && referredBy) {
-    const referralPartner = await ReferralPartner.findById(referredBy);
-    if (!referralPartner) {
-        return res.status(404).json({
-            message: 'Referral Partner not found.'
-        });
+    let referralPartnerId = null;
+
+    if (referredBy) {
+      const referralPartner = await ReferralPartner.findById(referredBy);
+      if (!referralPartner) {
+        return res.status(404).json({ message: 'Referral Partner not found.' });
+      }
+      referralPartnerId = referralPartner._id;
     }
 
-    referralPartnerId = referralPartner._id;
-}
-
-//         const generateReceiptNumber = () => {
-//   return `OPD-${Date.now()}`;
-// };
-
-// let receiptNumber;
-// if (visitType === 'OPD') {
-//   receiptNumber = generateReceiptNumber();
-// }
-        const newVisit = new Visit({
-            patientId: patient.patientId, 
-            patientDbId: patient._id,    
-            visitType,
-            referredBy: referralPartnerId,
-            assignedDoctorId:  assignedDoctorId,
-              status: 'Registered',
-            payment: visitType === 'OPD' ? payment : undefined
-        });
-
-        await newVisit.save();
-   
-        const newVisitObject = newVisit.toObject();
-        res.status(201).json({ message: 'Visit created successfully.', visit: 
-            { patientName:patient.fullName,
-              doctorName:doctor.userId.name,
-              ...newVisitObject
-            } 
-        });
-    } catch (error) {
-        console.error('Create Visit Error:', error);
-        res.status(500).json({ message: 'Server error.' });
+    // ✅ ONLY OPD GETS RECEIPT NUMBER
+    let receiptNumber;
+    if (visitType === 'OPD') {
+      receiptNumber = generateReceiptNumber();
     }
+
+    const newVisit = new Visit({
+      patientId: patient.patientId,
+      patientDbId: patient._id,
+      visitType,
+      assignedDoctorId,
+      referredBy: referralPartnerId,
+      receiptNumber,
+      status: 'Registered',
+      payment: visitType === 'OPD' ? payment : undefined
+    });
+
+    await newVisit.save();
+
+    res.status(201).json({
+      message: 'Visit created successfully.',
+      visit: {
+        ...newVisit.toObject(),
+        patientName: patient.fullName,
+        doctorName: doctor?.userId?.name || ''
+      }
+    });
+
+  } catch (error) {
+    console.error('Create Visit Error:', error);
+    res.status(500).json({ message: 'Server error.' });
+  }
 };
+
 // const addPrescriptionHandler = async (req, res) => {
 //   try {
 //     const { visitId } = req.params;
