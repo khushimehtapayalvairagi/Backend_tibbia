@@ -309,7 +309,6 @@ exports.bulkUploadProcedures = async (req, res) => {
   }
 };
 
-
 exports.bulkUploadWards = async (req, res) => {
   if (!req.file) return res.status(400).json({ message: "No file uploaded" });
 
@@ -323,41 +322,80 @@ exports.bulkUploadWards = async (req, res) => {
 
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const data = xlsx.utils.sheet_to_json(sheet, { defval: "" });
+
+  // Remove the uploaded file
   fs.unlinkSync(req.file.path);
 
   const errorRows = [];
   const wardsToInsert = [];
 
   for (let i = 0; i < data.length; i++) {
+    const rowNum = i + 2; // Excel row number
     const row = data[i];
-    const name = row.name?.trim();
-    const roomCategoryName = row.roomCategory?.trim();
-   const bedsStr = String(row.beds ?? "").trim();
-// comma-separated bed numbers
 
+    const name = String(row.name ?? "").trim();
+    const roomCategoryName = String(row.roomCategory ?? "").trim();
+    const bedsStr = String(row.beds ?? "").trim();
+
+    // Check required fields
     if (!name || !roomCategoryName || !bedsStr) {
-      errorRows.push(i + 2); // +2 for header row
+      errorRows.push(rowNum);
       continue;
     }
 
- const roomCategoryData =
-  await RoomCategory.findOne({
-    $or: [
-      { name: { $regex: new RegExp("^" + roomCategoryName + "$", "i") } },
-      { description: { $regex: new RegExp("^" + roomCategoryName + "$", "i") } },
-      { name: { $regex: new RegExp(roomCategoryName, "i") } },
-      { description: { $regex: new RegExp(roomCategoryName, "i") } }
-    ]
-  });
+    // Try to find existing category
+    let roomCategoryData = await RoomCategory.findOne({
+      $or: [
+        { name: { $regex: new RegExp("^" + roomCategoryName + "$", "i") } },
+        { description: { $regex: new RegExp("^" + roomCategoryName + "$", "i") } },
+        { name: { $regex: new RegExp(roomCategoryName, "i") } },
+        { description: { $regex: new RegExp(roomCategoryName, "i") } }
+      ]
+    });
 
+    // If not found, create new category
+    if (!roomCategoryData) {
+      try {
+        roomCategoryData = await RoomCategory.create({
+          name: roomCategoryName,
+          description: roomCategoryName
+        });
+      } catch (err) {
+        console.error("Failed to create room category: ", roomCategoryName, err);
+        errorRows.push(rowNum);
+        continue;
+      }
+    }
 
-    const bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
+    // Parse beds
+    let bedNumbers = [];
+    const rangeMatch = bedsStr.match(/^(\d+)\s*to\s*(\d+)$/i);
+
+    if (rangeMatch) {
+      const start = Number(rangeMatch[1]);
+      const end = Number(rangeMatch[2]);
+
+      if (isNaN(start) || isNaN(end) || start > end) {
+        errorRows.push(rowNum);
+        continue;
+      }
+
+      for (let b = start; b <= end; b++) {
+        bedNumbers.push(String(b));
+      }
+    } else {
+      bedNumbers = bedsStr.split(",").map(b => b.trim()).filter(Boolean);
+    }
+
     if (bedNumbers.length === 0) {
-      errorRows.push(i + 2);
+      errorRows.push(rowNum);
       continue;
     }
 
-    const beds = bedNumbers.map(bedNumber => ({ bedNumber, status: 'available' }));
+    const beds = bedNumbers.map(bedNumber => ({
+      bedNumber,
+      status: "available"
+    }));
 
     wardsToInsert.push({
       name,
@@ -366,16 +404,19 @@ exports.bulkUploadWards = async (req, res) => {
     });
   }
 
-  if (errorRows.length > 0)
+  if (errorRows.length > 0) {
     return res.status(400).json({ message: "Validation failed at rows", errorRows });
+  }
 
   try {
     await Ward.insertMany(wardsToInsert);
     res.json({ message: "Wards uploaded successfully", count: wardsToInsert.length });
   } catch (err) {
+    console.error("DB Insert Error:", err);
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
+
 
 
 
