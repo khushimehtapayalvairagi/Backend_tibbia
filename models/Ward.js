@@ -6,7 +6,7 @@ const BedSchema = new mongoose.Schema({
 });
 
 const WardSchema = new mongoose.Schema({
-    name: { type: String, required: true, unique: true },
+    name: { type: String, required: true },
     roomCategory: { type: mongoose.Schema.Types.ObjectId, ref: 'Room' },
     beds: [BedSchema]
 });
