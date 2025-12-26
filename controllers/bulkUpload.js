@@ -376,20 +376,39 @@ exports.bulkUploadWards = async (req, res) => {
       continue;
     }
 
-    const bedNumbers = bedsStr
-      .split(",")
-      .map(b => b.trim())
-      .filter(Boolean);
+// parse ranges like "1 To 15" or single values like "77"
+const beds = [];
 
-    if (!bedNumbers.length) {
-      errorRows.push(excelRow);
-      continue;
+const parts = bedsStr.split(",").map(x => x.trim()).filter(Boolean);
+
+for (const p of parts) {
+  // if it's a range
+  if (p.toLowerCase().includes("to")) {
+    const [start, , end] = p.split(" ");
+    const startNum = parseInt(start);
+    const endNum = parseInt(end);
+    if (!isNaN(startNum) && !isNaN(endNum)) {
+      for (let i = startNum; i <= endNum; i++) {
+        beds.push({
+          bedNumber: i,
+          status: "available"
+        });
+      }
     }
+  } else {
+    // single bed
+    const num = parseInt(p);
+    if (!isNaN(num)) {
+      beds.push({ bedNumber: num, status: "available" });
+    }
+  }
+}
 
-    const beds = bedNumbers.map(b => ({
-      bedNumber: b,
-      status: "available"
-    }));
+if (!beds.length) {
+  errorRows.push(excelRow);
+  continue;
+}
+
 
     wardsToInsert.push({
       name,

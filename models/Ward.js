@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
 
 const BedSchema = new mongoose.Schema({
-    bedNumber: { type: String, required: true},
+     beds: [
+    { bedNumber: Number, status: String }  // available or occupied
+  ],
     status: { type: String, enum: ['available', 'occupied', 'cleaning'], default: 'available' }
 });
 

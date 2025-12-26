@@ -98,6 +98,7 @@ exports.createIPDAdmission = async (req, res) => {
       expectedDischargeDate,
     } = req.body;
 
+    // 1️⃣ Required field validation
     if (
       !patientId ||
       !visitId ||
@@ -109,6 +110,7 @@ exports.createIPDAdmission = async (req, res) => {
       return res.status(400).json({ message: "All fields are required." });
     }
 
+    // 2️⃣ Prevent duplicate admission
     const existingAdmission = await IPDAdmission.findOne({
       patientId,
       status: "Admitted",
@@ -120,6 +122,7 @@ exports.createIPDAdmission = async (req, res) => {
       });
     }
 
+    // 3️⃣ Load referenced records
     const [patient, visit, doctor, ward] = await Promise.all([
       Patient.findById(patientId),
       Visit.findById(visitId),
@@ -134,7 +137,7 @@ exports.createIPDAdmission = async (req, res) => {
       });
     }
 
-    // Find the bed in the ward document by normalizing strings
+    // 4️⃣ Find the bed in the ward
     const matchedBed = ward.beds.find(
       (b) =>
         String(b.bedNumber).trim().toLowerCase() ===
@@ -147,7 +150,7 @@ exports.createIPDAdmission = async (req, res) => {
         .json({ message: "Bed not found in this ward." });
     }
 
-    // Check if any *active admission* exists for that bed (matching computed UI logic)
+    // 5️⃣ Check if bed is already occupied via any *active admission*
     const activeAdmissions = await IPDAdmission.find({
       wardId,
       bedNumber: matchedBed.bedNumber,
@@ -155,23 +158,23 @@ exports.createIPDAdmission = async (req, res) => {
     });
 
     if (activeAdmissions.length > 0) {
-      // If there exists an active admission, the bed is truly occupied
       return res
         .status(400)
         .json({ message: "Bed is not available." });
     }
 
-    // Now that we know it's available, update the *stored DB bed status field* too
+    // 6️⃣ Update stored DB bed status so it's marked occupied
     await Ward.updateOne(
       { _id: wardId, "beds.bedNumber": matchedBed.bedNumber },
       { $set: { "beds.$.status": "occupied" } }
     );
 
+    // 7️⃣ Create the actual IPD admission
     const admission = new IPDAdmission({
       patientId,
       visitId,
       wardId,
-      bedNumber: matchedBed.bedNumber, 
+      bedNumber: matchedBed.bedNumber,
       roomCategoryId,
       admittingDoctorId: userDoctorId,
       expectedDischargeDate,
@@ -179,17 +182,22 @@ exports.createIPDAdmission = async (req, res) => {
 
     await admission.save();
 
+    // 8️⃣ Mark patient status as Active
     patient.status = "Active";
     await patient.save();
 
-    res
-      .status(201)
-      .json({ message: "IPD Admission successful.", admission });
+    // 9️⃣ Return success
+    res.status(201).json({
+      message: "IPD Admission successful.",
+      admission,
+    });
   } catch (error) {
     console.error("IPD Admission Error:", error);
     res.status(500).json({ message: "Server error." });
   }
 };
+
+
 
 
 exports.getIPDAdmissionsByPatient = async (req, res) => {
