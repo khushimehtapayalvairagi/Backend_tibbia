@@ -649,35 +649,63 @@ exports.bulkUploadDoctors = async (req, res) => {
       const row = data[i];
       const rowNum = i + 2;
 
-      let { name, email, password,role,doctorType, specialty, department, medicalLicenseNumber } = row;
+      let {
+        name,
+        email,
+        password,
+        role,
+        doctorType,
+        specialty,
+        department,
+        medicalLicenseNumber,
+      } = row;
 
+      // Normalize values
       name = String(name || "").trim();
       email = String(email || "").trim();
       password = String(password || "").trim();
-       role = String(role || "").trim();
+      role = String(role || "").trim();
       doctorType = String(doctorType || "").trim();
       specialty = String(specialty || "").trim();
-      department = String(department || "").trim();
       medicalLicenseNumber = String(medicalLicenseNumber || "").trim();
 
-      if (!name || !email || !password || !doctorType || !specialty || !department || !medicalLicenseNumber) {
+      // Required validation
+      if (
+        !name ||
+        !email ||
+        !password ||
+        !doctorType ||
+        !specialty ||
+        !medicalLicenseNumber
+      ) {
         errors.push({ row: rowNum, error: "Missing required fields" });
         continue;
       }
 
-      // Check if user already exists
-      const existingUser = await User.findOne({ email });
-
-      const specialtyData = await Specialty.findOne({ name: new RegExp(`^${specialty}$`, "i") });
-      const departmentData = await Department.findOne({ name: new RegExp(`^${department}$`, "i") });
-
-      if (!specialtyData || !departmentData) {
-        errors.push({ row: rowNum, error: "Invalid Specialty or Department" });
+      if (role.toUpperCase() !== "DOCTOR") {
+        errors.push({ row: rowNum, error: "Role must be DOCTOR" });
         continue;
       }
 
+      // 🔹 Find specialty
+      const specialtyData = await Specialty.findOne({
+        name: new RegExp(`^${specialty}$`, "i"),
+      });
+
+      if (!specialtyData) {
+        errors.push({
+          row: rowNum,
+          error: `Specialty '${specialty}' not found in database`,
+        });
+        continue;
+      }
+
+      // 🔹 Department set equal to specialty
+      const departmentData = specialtyData;
+
+      const existingUser = await User.findOne({ email });
+
       if (existingUser) {
-        // ✅ Update existing doctor to active
         await Doctor.findOneAndUpdate(
           { userId: existingUser._id },
           {
@@ -694,7 +722,7 @@ exports.bulkUploadDoctors = async (req, res) => {
         continue;
       }
 
-      // Create new user
+      // create user
       const hashedPassword = await bcrypt.hash(password, 10);
       const newUser = await User.create({
         name,
@@ -703,14 +731,14 @@ exports.bulkUploadDoctors = async (req, res) => {
         role: "DOCTOR",
       });
 
-      // Create doctor
+      // create doctor
       await Doctor.create({
         userId: newUser._id,
         doctorType,
         specialty: specialtyData._id,
         department: departmentData._id,
         medicalLicenseNumber,
-        isActive: true, // ✅ Always active
+        isActive: true,
       });
 
       successCount++;
@@ -729,6 +757,7 @@ exports.bulkUploadDoctors = async (req, res) => {
     res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
+
 
 
 
@@ -758,24 +787,24 @@ exports.bulkUploadStaff = async (req, res) => {
         if (
           !row.name ||
           !row.email ||
-          !row.designation ||
-          !row.department
+          !row.designation 
+         
         ) {
           throw new Error("Missing required staff fields.");
         }
 
         // ✅ 2. Find Department by ID or Name
-        let departmentData;
-        if (/^[0-9a-fA-F]{24}$/.test(row.department)) {
-          departmentData = await Department.findById(row.department);
-        } else {
-          departmentData = await Department.findOne({
-            name: { $regex: new RegExp("^" + row.department + "$", "i") },
-          });
-        }
+        // let departmentData;
+        // if (/^[0-9a-fA-F]{24}$/.test(row.department)) {
+        //   departmentData = await Department.findById(row.department);
+        // } else {
+        //   departmentData = await Department.findOne({
+        //     name: { $regex: new RegExp("^" + row.department + "$", "i") },
+        //   });
+        // }
 
-        if (!departmentData)
-          throw new Error(`Department '${row.department}' not found.`);
+        // if (!departmentData)
+        //   throw new Error(`Department '${row.department}' not found.`);
 
         // ✅ 3. Prevent duplicate email
         const existingUser = await User.findOne({ email: row.email });
@@ -796,7 +825,7 @@ const hashedPassword = await bcrypt.hash(rawPassword, 10);
         // ✅ 5. Create staff
         await Staff.create({
           userId: newUser._id,
-          department: departmentData._id,
+          // department: departmentData._id,
           designation: row.designation,
           contactNumber: row.contactNumber || "",
           isActive: true,
