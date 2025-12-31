@@ -808,28 +808,29 @@ exports.bulkUploadStaff = async (req, res) => {
 
       try {
         const name = String(row.name || "").trim();
-        const email = String(row.email || "").trim();
+        const email = String(row.email || "").trim().toLowerCase();
         const rawPassword = String(row.password || "").trim();
         const contactNumber = String(row.contactNumber || "").trim();
-        let designation = String(row.designation || "").trim();
+        const designationRaw = String(row.designation || "").trim();
 
-        if (!name || !email || !designation) {
+        // Required fields
+        if (!name || !email || !designationRaw) {
           throw new Error("Missing required field (name, email, or designation)");
         }
 
+        // Email format check
         if (!/^\S+@\S+\.\S+$/.test(email)) {
           throw new Error("Invalid email format");
         }
 
-        // Normalize designation
-        const match = allowedDesignations.find(
-          (d) => d.toLowerCase() === designation.toLowerCase()
+        // Normalize designation to allowed enum
+        const designation = allowedDesignations.find(
+          d => d.toLowerCase() === designationRaw.toLowerCase()
         );
 
-        if (!match) {
-          throw new Error(`Invalid designation '${designation}'`);
+        if (!designation) {
+          throw new Error(`Invalid designation '${designationRaw}'`);
         }
-        designation = match;
 
         // Find or create user
         let user = await User.findOne({ email });
@@ -844,6 +845,7 @@ exports.bulkUploadStaff = async (req, res) => {
           });
         }
 
+        // Create staff entry
         await Staff.create({
           userId: user._id,
           designation,
@@ -869,6 +871,7 @@ exports.bulkUploadStaff = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
