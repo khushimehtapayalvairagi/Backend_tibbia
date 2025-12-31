@@ -780,7 +780,6 @@ exports.bulkUploadDoctors = async (req, res) => {
 // ----------- BULK UPLOAD STAFF -----------
 
 // ----------- BULK UPLOAD STAFF -----------
-
 exports.bulkUploadStaff = async (req, res) => {
   if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
@@ -794,6 +793,14 @@ exports.bulkUploadStaff = async (req, res) => {
 
     const errors = [];
     let successCount = 0;
+
+    const validDesignations = [
+      "Head Nurse",
+      "Lab Technician",
+      "Receptionist",
+      "Inventory Manager",
+      "Other"
+    ];
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
@@ -818,32 +825,34 @@ exports.bulkUploadStaff = async (req, res) => {
           throw new Error("Contact must be numeric");
         }
 
-        // check if user already exists
+        // find or create user
         let user = await User.findOne({ email });
 
         if (!user) {
-          // create new user if not exists
-          const password = rawPassword || "123456";
-          const hashedPassword = await bcrypt.hash(password, 10);
-
+          const passwordHash = await bcrypt.hash(rawPassword || "123456", 10);
           user = await User.create({
             name,
             email,
-            password: hashedPassword,
+            password: passwordHash,
             role: "STAFF",
           });
         }
 
-        // create staff entry for this user
+        // normalize designation
+        const normalized = validDesignations.find(
+          (d) => d.toLowerCase() === designation.toLowerCase()
+        );
+
+        const finalDesignation = normalized || "Other";
+
         await Staff.create({
           userId: user._id,
-          designation,
+          designation: finalDesignation,
           contactNumber: contactNumber || "",
           isActive: true,
         });
 
         successCount++;
-
       } catch (err) {
         errors.push({ row: rowNum, error: err.message });
       }
@@ -855,12 +864,13 @@ exports.bulkUploadStaff = async (req, res) => {
       errorCount: errors.length,
       errorRows: errors,
     });
-    
+
   } catch (err) {
     console.error("Bulk upload error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
