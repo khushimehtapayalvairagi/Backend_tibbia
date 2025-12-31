@@ -361,42 +361,52 @@ const registerHandler = async (req, res) => {
     }
 
     // Handle DOCTOR
-    if (role.toUpperCase() === 'DOCTOR') {
-      if (!doctorType || !specialty || !medicalLicenseNumber) {
-        throw new Error('doctorType, specialty, and medicalLicenseNumber are required for Doctor.');
-      }
+   // Handle DOCTOR
+if (role.toUpperCase() === 'DOCTOR') {
+  if (!doctorType || !specialty || !medicalLicenseNumber) {
+    throw new Error('doctorType, specialty, and medicalLicenseNumber are required for Doctor.');
+  }
 
-      const specialtyData = await Specialty.findOne({
-        name: new RegExp(`^${specialty.trim()}$`, 'i'),
-      });
-      if (!specialtyData) throw new Error(`Specialty '${specialty}' not found.`);
+  const specialtyData = await Specialty.findOne({
+    name: new RegExp(`^${specialty.trim()}$`, 'i'),
+  });
+  if (!specialtyData) throw new Error(`Specialty '${specialty}' not found.`);
 
-      const departmentData = await Department.findById(department);
-      if (!departmentData) throw new Error('Department not found.');
-
-      const allDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
-      const fullWeekSchedule = allDays.map(day => ({
-        dayOfWeek: day,
-        startTime: '00:00',
-        endTime: '23:59',
-        isAvailable: true
-      }));
-
-      const doctor = await Doctor.create({
-        userId: newUser._id,
-        doctorType,
-        specialty: specialtyData._id,
-        department: departmentData._id,
-        medicalLicenseNumber,
-        schedule: schedule && schedule.length ? schedule : fullWeekSchedule
-      });
-
-      return res.status(201).json({
-        message: 'Doctor registered successfully with schedule.',
-        userId: newUser._id,
-        doctorId: doctor._id
-      });
+  let departmentId = null;
+  if (department) {
+    const departmentData = await Department.findOne({ name: department.trim() });
+    if (!departmentData) {
+      // instead of throwing, just leave department null
+      departmentId = null;
+    } else {
+      departmentId = departmentData._id;
     }
+  }
+
+  const allDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+  const fullWeekSchedule = allDays.map(day => ({
+    dayOfWeek: day,
+    startTime: '00:00',
+    endTime: '23:59',
+    isAvailable: true
+  }));
+
+  const doctor = await Doctor.create({
+    userId: newUser._id,
+    doctorType,
+    specialty: specialtyData._id,
+    department: departmentId,   // optional now
+    medicalLicenseNumber,
+    schedule: schedule && schedule.length ? schedule : fullWeekSchedule
+  });
+
+  return res.status(201).json({
+    message: 'Doctor registered successfully with schedule.',
+    userId: newUser._id,
+    doctorId: doctor._id
+  });
+}
+
 
     // Handle STAFF
     if (role.toUpperCase() === 'STAFF') {
