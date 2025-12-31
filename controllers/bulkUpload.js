@@ -782,72 +782,76 @@ exports.bulkUploadDoctors = async (req, res) => {
 // ----------- BULK UPLOAD STAFF -----------
 
 
-exports.bulkUploadStaff = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
-    }
 
-    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+
+exports.bulkUploadStaff = async (req, res) => {
+  if (!req.file)
+    return res.status(400).json({ message: 'No file uploaded' });
+
+  try {
+    // Read workbook from disk path
+    const workbook = xlsx.readFile(req.file.path);
+
+    // Delete the file after reading
+    fs.unlinkSync(req.file.path);
+
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
     const rows = xlsx.utils.sheet_to_json(sheet);
 
-    let success = [];
+    let successCount = 0;
     let failed = [];
 
     for (let i = 0; i < rows.length; i++) {
-      try {
-        const {
-          name,
-          email,
-          password,
-          contactNumber,
-          designation
-        } = rows[i];
+      const rowNum = i + 2;
+      const {
+        name,
+        email,
+        password,
+        contactNumber,
+        designation
+      } = rows[i];
 
-        // 🔴 Required fields check
+      try {
         if (!name || !email || !password || !designation) {
-          failed.push({ row: i + 2, error: 'Missing required fields' });
-          continue;
+          throw new Error('Missing required fields');
         }
 
-        // ✅ ALWAYS CREATE NEW USER
+        // Create user
         const user = await User.create({
-          name,
-          email,
-          password,
+          name: String(name).trim(),
+          email: String(email).trim(),
+          password: String(password).trim(),
           role: 'STAFF'
         });
 
-        // ✅ CREATE STAFF FOR THAT USER
+        // Create staff entry
         await Staff.create({
           userId: user._id,
-          contactNumber: contactNumber || '',
-          designation
+          contactNumber: String(contactNumber || '').trim(),
+          designation: String(designation).trim(),
+          isActive: true
         });
 
-        success.push({ row: i + 2, name });
-
+        successCount++;
       } catch (err) {
-        failed.push({
-          row: i + 2,
-          error: err.message
-        });
+        failed.push({ row: rowNum, error: err.message });
       }
     }
 
-    return res.status(201).json({
-      message: 'Bulk staff upload completed',
-      inserted: success.length,
+    return res.status(200).json({
+      message: 'Staff bulk upload completed',
+      successCount,
       failedCount: failed.length,
       failed
     });
 
   } catch (error) {
     console.error('Bulk Upload Error:', error);
-    res.status(500).json({ message: 'Server error' });
+    return res.status(500).json({ message: 'Server error.' });
   }
 };
+
 
 
 
