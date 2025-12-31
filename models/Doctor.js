@@ -34,7 +34,7 @@ const DoctorSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   doctorType: { type: String, enum: ['Consultant', 'On-roll'], required: true },
   specialty: { type: mongoose.Schema.Types.ObjectId, ref: 'Specialty', required: true },
-  department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
+ // department: { type: mongoose.Schema.Types.ObjectId, ref: 'Department', required: true },
   medicalLicenseNumber: { type: String, required: true, unique: true },
 
   // ✅ Always save doctor schedule (default: empty)
