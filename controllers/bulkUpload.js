@@ -784,53 +784,54 @@ exports.bulkUploadStaff = async (req, res) => {
     return res.status(400).json({ message: "No file uploaded" });
 
   try {
-    const data = await parseFile(req.file.path); // parse CSV/XLSX
-    fs.unlinkSync(req.file.path); // delete temp file
+    const data = await parseFile(req.file.path);
+    fs.unlinkSync(req.file.path);
 
     if (!data.length)
       return res.status(400).json({ message: "File is empty" });
 
     const errors = [];
+    const skipped = [];
     let successCount = 0;
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const rowNum = i + 2; // approx Excel row
+      const rowNum = i + 2;
 
       try {
-        // Normalize columns
         const name = String(row.name || "").trim();
         const email = String(row.email || "").trim();
         const rawPassword = String(row.password || "").trim();
         const contactNumber = String(row.contactNumber || "").trim();
         const designation = String(row.designation || "").trim();
 
-        // Required validation
         if (!name || !email || !designation) {
-          throw new Error("Missing required field (name,email,designation)");
+          throw new Error("Missing required field (name, email, or designation)");
         }
 
-        // Validate email format
         if (!/^\S+@\S+\.\S+$/.test(email)) {
           throw new Error("Invalid email format");
         }
 
-        // Validate contact number
-        if (!contactNumber || !/^\d{10}$/.test(contactNumber)) {
-          throw new Error("Contact must be 10 digits");
+        if (contactNumber && !/^\d+$/.test(contactNumber)) {
+          throw new Error("Contact must be numeric");
         }
 
-        // Check duplicate in DB
+        // check duplicate
         const existingUser = await User.findOne({ email });
+
         if (existingUser) {
-          throw new Error(`Email '${email}' already exists`);
+          // SKIP but report it
+          skipped.push({
+            row: rowNum,
+            message: `Email '${email}' already exists, skipped`
+          });
+          continue;
         }
 
-        // Use provided password or default
         const password = rawPassword || "123456";
         const hashedPassword = await bcrypt.hash(password, 10);
 
-        // Create User
         const newUser = await User.create({
           name,
           email,
@@ -838,11 +839,10 @@ exports.bulkUploadStaff = async (req, res) => {
           role: "STAFF",
         });
 
-        // Create Staff
         await Staff.create({
           userId: newUser._id,
           designation,
-          contactNumber,
+          contactNumber: contactNumber || "",
           isActive: true,
         });
 
@@ -852,11 +852,12 @@ exports.bulkUploadStaff = async (req, res) => {
       }
     }
 
-    // Return summary
     return res.status(200).json({
       message: "Staff bulk upload completed",
       successCount,
-      failedCount: errors.length,
+      skippedCount: skipped.length,
+      errorCount: errors.length,
+      skippedRows: skipped,
       errorRows: errors,
     });
   } catch (err) {
@@ -864,6 +865,7 @@ exports.bulkUploadStaff = async (req, res) => {
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
