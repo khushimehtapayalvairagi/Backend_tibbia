@@ -779,6 +779,8 @@ exports.bulkUploadDoctors = async (req, res) => {
 
 // ----------- BULK UPLOAD STAFF -----------
 
+// ----------- BULK UPLOAD STAFF -----------
+
 exports.bulkUploadStaff = async (req, res) => {
   if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
@@ -791,7 +793,6 @@ exports.bulkUploadStaff = async (req, res) => {
       return res.status(400).json({ message: "File is empty" });
 
     const errors = [];
-    const skipped = [];
     let successCount = 0;
 
     for (let i = 0; i < data.length; i++) {
@@ -817,54 +818,32 @@ exports.bulkUploadStaff = async (req, res) => {
           throw new Error("Contact must be numeric");
         }
 
-        // check duplicate
-       let user;
+        // check if user already exists
+        let user = await User.findOne({ email });
 
-// if the user already exists, reuse it
-const existingUser = await User.findOne({ email });
+        if (!user) {
+          // create new user if not exists
+          const password = rawPassword || "123456";
+          const hashedPassword = await bcrypt.hash(password, 10);
 
-if (existingUser) {
-  user = existingUser;
-} else {
-  // otherwise create a new user
-  const hashedPassword = await bcrypt.hash(password, 10);
+          user = await User.create({
+            name,
+            email,
+            password: hashedPassword,
+            role: "STAFF",
+          });
+        }
 
-  user = await User.create({
-    name,
-    email,
-    password: hashedPassword,
-    role: "STAFF",
-  });
-}
-
-// now create the staff entry
-await Staff.create({
-  userId: user._id,
-  designation,
-  contactNumber: contactNumber || "",
-  isActive: true,
-});
-
-successCount++;
-
-        const password = rawPassword || "123456";
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = await User.create({
-          name,
-          email,
-          password: hashedPassword,
-          role: "STAFF",
-        });
-
+        // create staff entry for this user
         await Staff.create({
-          userId: newUser._id,
+          userId: user._id,
           designation,
           contactNumber: contactNumber || "",
           isActive: true,
         });
 
         successCount++;
+
       } catch (err) {
         errors.push({ row: rowNum, error: err.message });
       }
@@ -873,16 +852,16 @@ successCount++;
     return res.status(200).json({
       message: "Staff bulk upload completed",
       successCount,
-      skippedCount: skipped.length,
       errorCount: errors.length,
-      skippedRows: skipped,
       errorRows: errors,
     });
+    
   } catch (err) {
     console.error("Bulk upload error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
