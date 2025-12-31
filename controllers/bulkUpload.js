@@ -780,97 +780,75 @@ exports.bulkUploadDoctors = async (req, res) => {
 // ----------- BULK UPLOAD STAFF -----------
 
 // ----------- BULK UPLOAD STAFF -----------
+
+
 exports.bulkUploadStaff = async (req, res) => {
-  if (!req.file)
-    return res.status(400).json({ message: "No file uploaded" });
-
   try {
-    const data = await parseFile(req.file.path);
-    fs.unlinkSync(req.file.path);
+    if (!req.file) {
+      return res.status(400).json({ message: 'No file uploaded' });
+    }
 
-    if (!data.length)
-      return res.status(400).json({ message: "File is empty" });
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = xlsx.utils.sheet_to_json(sheet);
 
-    const errors = [];
-    let successCount = 0;
+    let success = [];
+    let failed = [];
 
-    const allowedDesignations = [
-      "Head Nurse",
-      "Lab Technician",
-      "Receptionist",
-      "Inventory Manager",
-      "Other"
-    ];
-
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowNum = i + 2;
-
+    for (let i = 0; i < rows.length; i++) {
       try {
-        const name = String(row.name || "").trim();
-        const email = String(row.email || "").trim().toLowerCase();
-        const rawPassword = String(row.password || "").trim();
-        const contactNumber = String(row.contactNumber || "").trim();
-        const designationRaw = String(row.designation || "").trim();
+        const {
+          name,
+          email,
+          password,
+          contactNumber,
+          designation
+        } = rows[i];
 
-        // Required fields
-        if (!name || !email || !designationRaw) {
-          throw new Error("Missing required field (name, email, or designation)");
+        // 🔴 Required fields check
+        if (!name || !email || !password || !designation) {
+          failed.push({ row: i + 2, error: 'Missing required fields' });
+          continue;
         }
 
-        // Email format check
-        if (!/^\S+@\S+\.\S+$/.test(email)) {
-          throw new Error("Invalid email format");
-        }
-
-        // Normalize designation to allowed enum
-        const designation = allowedDesignations.find(
-          d => d.toLowerCase() === designationRaw.toLowerCase()
-        );
-
-        if (!designation) {
-          throw new Error(`Invalid designation '${designationRaw}'`);
-        }
-
-        // Find or create user
-        let user = await User.findOne({ email });
-
-        if (!user) {
-          const passwordHash = await bcrypt.hash(rawPassword || "123456", 10);
-          user = await User.create({
-            name,
-            email,
-            password: passwordHash,
-            role: "STAFF",
-          });
-        }
-
-        // Create staff entry
-        await Staff.create({
-          userId: user._id,
-          designation,
-          contactNumber: contactNumber || "",
-          isActive: true,
+        // ✅ ALWAYS CREATE NEW USER
+        const user = await User.create({
+          name,
+          email,
+          password,
+          role: 'STAFF'
         });
 
-        successCount++;
+        // ✅ CREATE STAFF FOR THAT USER
+        await Staff.create({
+          userId: user._id,
+          contactNumber: contactNumber || '',
+          designation
+        });
+
+        success.push({ row: i + 2, name });
+
       } catch (err) {
-        errors.push({ row: rowNum, error: err.message });
+        failed.push({
+          row: i + 2,
+          error: err.message
+        });
       }
     }
 
-    return res.status(200).json({
-      message: "Staff bulk upload completed",
-      successCount,
-      errorCount: errors.length,
-      errorRows: errors
+    return res.status(201).json({
+      message: 'Bulk staff upload completed',
+      inserted: success.length,
+      failedCount: failed.length,
+      failed
     });
 
-  } catch (err) {
-    console.error("Bulk upload error:", err);
-    return res.status(500).json({ message: err.message });
+  } catch (error) {
+    console.error('Bulk Upload Error:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 };
+
 
 
 
