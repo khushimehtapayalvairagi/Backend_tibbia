@@ -818,16 +818,34 @@ exports.bulkUploadStaff = async (req, res) => {
         }
 
         // check duplicate
-        const existingUser = await User.findOne({ email });
+       let user;
 
-        if (existingUser) {
-          // SKIP but report it
-          skipped.push({
-            row: rowNum,
-            message: `Email '${email}' already exists, skipped`
-          });
-          continue;
-        }
+// if the user already exists, reuse it
+const existingUser = await User.findOne({ email });
+
+if (existingUser) {
+  user = existingUser;
+} else {
+  // otherwise create a new user
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  user = await User.create({
+    name,
+    email,
+    password: hashedPassword,
+    role: "STAFF",
+  });
+}
+
+// now create the staff entry
+await Staff.create({
+  userId: user._id,
+  designation,
+  contactNumber: contactNumber || "",
+  isActive: true,
+});
+
+successCount++;
 
         const password = rawPassword || "123456";
         const hashedPassword = await bcrypt.hash(password, 10);
