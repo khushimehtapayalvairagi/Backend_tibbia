@@ -831,7 +831,7 @@ const getAllDoctorsHandler = async (req, res) => {
     try {
         const doctors = await Doctor.find().populate('userId', 'name email role')
         .populate('specialty', 'name')
-          .populate('department','name')
+        //   .populate('department','name')
         res.status(200).json({ doctors });
     } catch (error) {
         console.error('Fetch Doctors Error:', error);
