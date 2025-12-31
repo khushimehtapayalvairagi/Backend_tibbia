@@ -763,95 +763,91 @@ exports.bulkUploadDoctors = async (req, res) => {
 
 // ----------- BULK UPLOAD STAFF -----------
 
-
-
 exports.bulkUploadStaff = async (req, res) => {
   if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
 
   try {
-    const data = await parseFile(req.file.path);
-    fs.unlinkSync(req.file.path);
+    const data = await parseFile(req.file.path); // parse CSV/XLSX
+    fs.unlinkSync(req.file.path); // delete temp file
 
     if (!data.length)
-      throw new Error("File is empty");
+      return res.status(400).json({ message: "File is empty" });
 
     const errors = [];
     let successCount = 0;
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
+      const rowNum = i + 2; // approx Excel row
 
       try {
-        // ✅ 1. Validate essential fields exist
-        if (
-          !row.name ||
-          !row.email ||
-          !row.designation 
-         
-        ) {
-          throw new Error("Missing required staff fields.");
+        // Normalize columns
+        const name = String(row.name || "").trim();
+        const email = String(row.email || "").trim();
+        const rawPassword = String(row.password || "").trim();
+        const contactNumber = String(row.contactNumber || "").trim();
+        const designation = String(row.designation || "").trim();
+
+        // Required validation
+        if (!name || !email || !designation) {
+          throw new Error("Missing required field (name,email,designation)");
         }
 
-        // ✅ 2. Find Department by ID or Name
-        // let departmentData;
-        // if (/^[0-9a-fA-F]{24}$/.test(row.department)) {
-        //   departmentData = await Department.findById(row.department);
-        // } else {
-        //   departmentData = await Department.findOne({
-        //     name: { $regex: new RegExp("^" + row.department + "$", "i") },
-        //   });
-        // }
+        // Validate email format
+        if (!/^\S+@\S+\.\S+$/.test(email)) {
+          throw new Error("Invalid email format");
+        }
 
-        // if (!departmentData)
-        //   throw new Error(`Department '${row.department}' not found.`);
+        // Validate contact number
+        if (!contactNumber || !/^\d{10}$/.test(contactNumber)) {
+          throw new Error("Contact must be 10 digits");
+        }
 
-        // ✅ 3. Prevent duplicate email
-        const existingUser = await User.findOne({ email: row.email });
-        if (existingUser)
-          throw new Error(`Email '${row.email}' already exists.`);
+        // Check duplicate in DB
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+          throw new Error(`Email '${email}' already exists`);
+        }
 
-        // ✅ 4. Create user
-const rawPassword = row.password ? String(row.password).trim() : "123456";
-const hashedPassword = await bcrypt.hash(rawPassword, 10);
+        // Use provided password or default
+        const password = rawPassword || "123456";
+        const hashedPassword = await bcrypt.hash(password, 10);
 
+        // Create User
         const newUser = await User.create({
-          name: row.name,
-          email: row.email,
+          name,
+          email,
           password: hashedPassword,
           role: "STAFF",
         });
 
-        // ✅ 5. Create staff
+        // Create Staff
         await Staff.create({
           userId: newUser._id,
-          // department: departmentData._id,
-          designation: row.designation,
-          contactNumber: row.contactNumber || "",
+          designation,
+          contactNumber,
           isActive: true,
         });
 
         successCount++;
       } catch (err) {
-        errors.push({ row: i + 2, error: err.message }); // +2 for Excel row number
+        errors.push({ row: rowNum, error: err.message });
       }
     }
 
-    if (errors.length > 0) {
-      return res.status(400).json({
-        message: "Validation failed. Fix errors and re-upload.",
-        errorRows: errors,
-      });
-    }
-
-    res.status(200).json({
-      message: `Bulk upload completed successfully. ${successCount} staff added.`,
-      errors,
+    // Return summary
+    return res.status(200).json({
+      message: "Staff bulk upload completed",
+      successCount,
+      failedCount: errors.length,
+      errorRows: errors,
     });
   } catch (err) {
     console.error("Bulk upload error:", err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
+
 
 
