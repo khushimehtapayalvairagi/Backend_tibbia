@@ -400,8 +400,8 @@ const registerHandler = async (req, res) => {
 
     // Handle STAFF
     if (role.toUpperCase() === 'STAFF') {
-      if (!contactNumber || !designation) {
-        throw new Error('contactNumber and designation are required for Staff.');
+      if (!designation) {
+        throw new Error('designation are required for Staff.');
       }
 
       let departmentId = null;
