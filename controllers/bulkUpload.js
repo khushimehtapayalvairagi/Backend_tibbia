@@ -794,7 +794,8 @@ exports.bulkUploadStaff = async (req, res) => {
     const errors = [];
     let successCount = 0;
 
-    const validDesignations = [
+    // Allowed values in your enum
+    const allowedDesignations = [
       "Head Nurse",
       "Lab Technician",
       "Receptionist",
@@ -811,8 +812,9 @@ exports.bulkUploadStaff = async (req, res) => {
         const email = String(row.email || "").trim();
         const rawPassword = String(row.password || "").trim();
         const contactNumber = String(row.contactNumber || "").trim();
-        const designation = String(row.designation || "").trim();
+        let designation = String(row.designation || "").trim();
 
+        // Basic required checks
         if (!name || !email || !designation) {
           throw new Error("Missing required field (name, email, or designation)");
         }
@@ -825,10 +827,21 @@ exports.bulkUploadStaff = async (req, res) => {
           throw new Error("Contact must be numeric");
         }
 
-        // find or create user
+        // Normalize the designation into allowed enum
+        const normalized = allowedDesignations.find(
+          (d) => d.toLowerCase() === designation.toLowerCase()
+        );
+
+        if (!normalized) {
+          throw new Error(`Invalid designation '${designation}'`);
+        }
+        designation = normalized;
+
+        // Find or create user
         let user = await User.findOne({ email });
 
         if (!user) {
+          // create new user
           const passwordHash = await bcrypt.hash(rawPassword || "123456", 10);
           user = await User.create({
             name,
@@ -838,22 +851,17 @@ exports.bulkUploadStaff = async (req, res) => {
           });
         }
 
-        // normalize designation
-        const normalized = validDesignations.find(
-          (d) => d.toLowerCase() === designation.toLowerCase()
-        );
-
-        const finalDesignation = normalized || "Other";
-
+        // Always create a staff entry for this row
         await Staff.create({
           userId: user._id,
-          designation: finalDesignation,
+          designation,
           contactNumber: contactNumber || "",
           isActive: true,
         });
 
         successCount++;
       } catch (err) {
+        // Log row error with the message
         errors.push({ row: rowNum, error: err.message });
       }
     }
@@ -862,14 +870,14 @@ exports.bulkUploadStaff = async (req, res) => {
       message: "Staff bulk upload completed",
       successCount,
       errorCount: errors.length,
-      errorRows: errors,
+      errorRows: errors
     });
-
   } catch (err) {
     console.error("Bulk upload error:", err);
     return res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
