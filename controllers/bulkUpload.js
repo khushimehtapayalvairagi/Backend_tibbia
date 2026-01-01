@@ -635,46 +635,61 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 // ----------- BULK UPLOAD DOCTORS -----------
 exports.bulkUploadDoctors = async (req, res) => {
-  if (!req.file) 
+  if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
+  }
 
   try {
-    // parse the uploaded Excel/CSV file
-    const data = await parseFile(req.file.path);
-
-    // delete temp file
+    const rows = await parseFile(req.file.path);
     fs.unlinkSync(req.file.path);
 
-    if (!data.length) 
+    if (!rows || rows.length === 0) {
       return res.status(400).json({ message: "Uploaded file is empty" });
+    }
 
-    const errors = [];
     let successCount = 0;
+    const errorRows = [];
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowNum = i + 2; // approximate Excel row number
+    for (let i = 0; i < rows.length; i++) {
+      const row = rows[i];
+      const rowNumber = i + 2;
 
       try {
         // Normalize headers
-        const normalized = {};
-        for (const key in row) {
-          const cleanKey = key.trim().toLowerCase().replace(/\s+/g, "");
-          normalized[cleanKey] = row[key];
-        }
+        const data = {};
+        Object.keys(row).forEach((key) => {
+          const cleanKey = key.toLowerCase().replace(/\s+/g, "");
+          data[cleanKey] = row[key];
+        });
 
-        const name = String(normalized.name || "").trim();
-        const email = String(normalized.email || "").trim();
-        const password = String(normalized.password || "").trim();
-        const role = String(normalized.role || "").trim();
-        const doctorType = String(normalized.doctortype || "").trim();
-        const specialty = String(normalized.specialty || "").trim();
-        const medicalLicenseNumber = String(
-          normalized.medicallicensenumber || ""
+        // Flexible header mapping
+        const name = String(data.name || "").trim();
+        const email = String(data.email || "").trim();
+        const password = String(data.password || "").trim();
+        const role = String(data.role || "").trim();
+
+        const doctorType = String(
+          data.doctortype || data.type || ""
         ).trim();
 
-        // Required validation
-        if (!name || !email || !password || !doctorType || !specialty || !medicalLicenseNumber) {
+        const specialtyName = String(data.specialty || "").trim();
+
+        const medicalLicenseNumber = String(
+          data.medicallicensenumber ||
+          data.medicallicense ||
+          data.licensenumber ||
+          ""
+        ).trim();
+
+        // Validation
+        if (
+          !name ||
+          !email ||
+          !password ||
+          !doctorType ||
+          !specialtyName ||
+          !medicalLicenseNumber
+        ) {
           throw new Error("Missing required fields");
         }
 
@@ -682,73 +697,61 @@ exports.bulkUploadDoctors = async (req, res) => {
           throw new Error("Role must be DOCTOR");
         }
 
-        // Find specialty in database
-        const specialtyData = await Specialty.findOne({
-          name: new RegExp(`^${specialty}$`, "i"),
+        // Find specialty
+        const specialty = await Specialty.findOne({
+          name: new RegExp(`^${specialtyName}$`, "i"),
         });
 
-        if (!specialtyData) {
-          throw new Error(`Specialty '${specialty}' not found in database`);
+        if (!specialty) {
+          throw new Error(`Specialty '${specialtyName}' not found`);
         }
 
-        // ✅ Remove department completely
+        // Check existing user
+        let user = await User.findOne({ email });
 
-        // If user exists, update doctor record
-        const existingUser = await User.findOne({ email });
-
-        if (existingUser) {
-          await Doctor.findOneAndUpdate(
-            { userId: existingUser._id },
-            {
-              doctorType,
-              specialty: specialtyData._id,
-              medicalLicenseNumber,
-              isActive: true,
-            },
-            { new: true }
-          );
-          successCount++;
-          continue;
+        if (!user) {
+          const hashedPassword = await bcrypt.hash(password, 10);
+          user = await User.create({
+            name,
+            email,
+            password: hashedPassword,
+            role: "DOCTOR",
+          });
         }
 
-        // Create new user
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        const newUser = await User.create({
-          name,
-          email,
-          password: hashedPassword,
-          role: "DOCTOR",
-        });
-
-        // Create doctor profile WITHOUT department
-        await Doctor.create({
-          userId: newUser._id,
-          doctorType,
-          specialty: specialtyData._id,
-          medicalLicenseNumber,
-          isActive: true,
-        });
+        // Upsert doctor (NO department)
+        await Doctor.findOneAndUpdate(
+          { userId: user._id },
+          {
+            userId: user._id,
+            doctorType,
+            specialty: specialty._id,
+            medicalLicenseNumber,
+            isActive: true,
+          },
+          { upsert: true, new: true }
+        );
 
         successCount++;
       } catch (err) {
-        // Collect row-specific errors
-        errors.push({ row: rowNum, error: err.message });
+        errorRows.push({
+          row: rowNumber,
+          error: err.message,
+        });
       }
     }
 
     return res.status(200).json({
-      message: errors.length ? "Some rows failed" : "Doctors uploaded successfully",
+      message: errorRows.length ? "Some rows failed" : "Doctors uploaded successfully",
       successCount,
-      errorRows: errors,
+      errorRows,
     });
   } catch (err) {
-    // cleanup on error
-    if (req.file && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    console.error("Bulk upload failed:", err);
-    return res.status(500).json({ message: "Upload failed", error: err.message });
+    console.error("Bulk upload error:", err);
+    return res.status(500).json({
+      message: "Upload failed",
+      error: err.message,
+    });
   }
 };
 
