@@ -1,8 +1,6 @@
 const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
-const fastcsv = require("fast-csv");
-
 const xlsx = require("xlsx");
 const bcrypt = require("bcrypt");
 const mongoose = require("mongoose");
@@ -636,117 +634,144 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 
 // ----------- BULK UPLOAD DOCTORS -----------
-
-
 exports.bulkUploadDoctors = async (req, res) => {
-  if (!req.file)
+  if (!req.file) 
     return res.status(400).json({ message: "No file uploaded" });
 
-  // detect delimiter from first line
-  const firstLine = fs.readFileSync(req.file.path, "utf8").split("\n")[0];
+  try {
+    // parse the uploaded Excel/CSV file
+    const data = await parseFile(req.file.path);
 
-  let delimiter = ",";
-  if (firstLine.includes("\t")) delimiter = "\t";
-  else if (firstLine.includes(";")) delimiter = ";";
+    // delete temp file
+    fs.unlinkSync(req.file.path);
 
-  const fileRows = [];
-  const errors = [];
-  let successCount = 0;
+    if (!data.length) 
+      return res.status(400).json({ message: "Uploaded file is empty" });
 
-  fs.createReadStream(req.file.path)
-    .pipe(
-      fastcsv.parse({ headers: true, trim: true, delimiter })
-    )
-    .on("error", (error) => {
-      console.error("CSV parse error:", error);
-    })
-    .on("data", (row) => {
-      fileRows.push(row);
-    })
-    .on("end", async () => {
-      fs.unlinkSync(req.file.path);
+    const errors = [];
+    let successCount = 0;
 
-      for (let i = 0; i < fileRows.length; i++) {
-        const row = fileRows[i];
-        const rowNum = i + 2;
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i];
+      const rowNum = i + 2; // +2 = approximate Excel row number
 
-        try {
-          const name = String(row.name || "").trim();
-          const email = String(row.email || "").trim().toLowerCase();
-          const password = String(row.password || "").trim();
-          const doctorType = String(row.doctorType || "").trim();
-          const specialtyRaw = String(row.specialty || "").trim();
-          const medicalLicense = String(row.medicalLicenseNumber || "").trim();
+      try {
+        // 🔹 Normalize headers: lower-case + trim + remove spaces
+        const normalized = {};
+        for (const key in row) {
+          const cleanKey = key
+            .trim()
+            .toLowerCase()
+            .replace(/\s+/g, "");
+          normalized[cleanKey] = row[key];
+        }
 
-          if (
-            !name ||
-            !email ||
-            !password ||
-            !doctorType ||
-            !specialtyRaw ||
-            !medicalLicense
-          ) {
-            throw new Error("Missing required fields");
-          }
+        const name = String(normalized.name || "").trim();
+        const email = String(normalized.email || "").trim();
+        const password = String(normalized.password || "").trim();
+        const role = String(normalized.role || "").trim();
+        const doctorType = String(normalized.doctortype || "").trim();
+        const specialty = String(normalized.specialty || "").trim();
+        const medicalLicenseNumber = String(
+          normalized.medicallicensenumber || ""
+        ).trim();
 
-          const specialtyData = await Specialty.findOne({
-            name: new RegExp(`^${specialtyRaw}$`, "i"),
-          });
+        // ❗ Required validation
+        if (
+          !name ||
+          !email ||
+          !password ||
+          !doctorType ||
+          !specialty ||
+          !medicalLicenseNumber
+        ) {
+          throw new Error("Missing required fields");
+        }
 
-          if (!specialtyData) {
-            throw new Error(`Specialty '${specialtyRaw}' not found`);
-          }
+        if (role.toUpperCase() !== "DOCTOR") {
+          throw new Error("Role must be DOCTOR");
+        }
 
-          let user = await User.findOne({ email });
+        // 📌 Find specialty in database
+        const specialtyData = await Specialty.findOne({
+          name: new RegExp(`^${specialty}$`, "i"),
+        });
 
-          if (!user) {
-            const hashed = await bcrypt.hash(password, 10);
-            user = await User.create({
-              name,
-              email,
-              password: hashed,
-              role: "DOCTOR",
-            });
-          } else {
-            user.name = name;
-            user.role = "DOCTOR";
-            await user.save();
-          }
+        if (!specialtyData) {
+          throw new Error(
+            `Specialty '${specialty}' not found in database`
+          );
+        }
 
-          let doctor = await Doctor.findOne({ userId: user._id });
+        // We treat department = specialty
+        const departmentData = specialtyData;
 
-          if (!doctor) {
-            await Doctor.create({
-              userId: user._id,
+        // ✅ If user already exists, update doctor record
+        const existingUser = await User.findOne({ email });
+
+        if (existingUser) {
+          await Doctor.findOneAndUpdate(
+            { userId: existingUser._id },
+            {
               doctorType,
               specialty: specialtyData._id,
-              medicalLicenseNumber: medicalLicense,
+              department: departmentData._id,
+              medicalLicenseNumber,
               isActive: true,
-            });
-          } else {
-            doctor.doctorType = doctorType;
-            doctor.specialty = specialtyData._id;
-            doctor.medicalLicenseNumber = medicalLicense;
-            doctor.isActive = true;
-            await doctor.save();
-          }
+            },
+            { new: true }
+          );
 
           successCount++;
-        } catch (err) {
-          errors.push({ row: rowNum, error: err.message });
+          continue;
         }
+
+        // 🔐 Hash password and create new user
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        const newUser = await User.create({
+          name,
+          email,
+          password: hashedPassword,
+          role: "DOCTOR",
+        });
+
+        // ➤ Create doctor profile
+        await Doctor.create({
+          userId: newUser._id,
+          doctorType,
+          specialty: specialtyData._id,
+          department: departmentData._id,
+          medicalLicenseNumber,
+          isActive: true,
+        });
+
+        successCount++;
+      } catch (err) {
+        // collect specific row errors
+        errors.push({ row: rowNum, error: err.message });
       }
+    }
 
-      return res.status(200).json({
-        message: errors.length
-          ? "Upload completed with some errors"
-          : "Doctors uploaded successfully",
-        successCount,
-        errorRows: errors,
-      });
+    return res.status(200).json({
+      message: errors.length
+        ? "Some rows failed"
+        : "Doctors uploaded successfully",
+      successCount,
+      errorRows: errors,
     });
+  } catch (err) {
+    // cleanup on error
+    if (req.file && fs.existsSync(req.file.path)) {
+      fs.unlinkSync(req.file.path);
+    }
+    console.error("Bulk upload failed:", err);
+    return res.status(500).json({
+      message: "Upload failed",
+      error: err.message,
+    });
+  }
 };
-
 
 
 
@@ -819,45 +844,6 @@ exports.bulkUploadStaff = async (req, res) => {
             role: "STAFF"
           });
         }
-
-        // Prepare staff payload
-        const staffPayload = {
-          userId: user._id,
-          designation,
-          isActive: true
-        };
-
-        // Only set contactNumber if present
-        if (contactNumberRaw) {
-          staffPayload.contactNumber = contactNumberRaw;
-        }
-
-        // Upsert staff (NO SKIP)
-        await Staff.findOneAndUpdate(
-          { userId: user._id },
-          staffPayload,
-          { upsert: true, new: true }
-        );
-
-        successCount++;
-      } catch (err) {
-        errors.push({ row: rowNum, error: err.message });
-      }
-    }
-
-    return res.status(200).json({
-      message: "Staff bulk upload completed",
-      successCount,
-      errorCount: errors.length,
-      errorRows: errors
-    });
-
-  } catch (err) {
-    console.error("Bulk upload error:", err);
-    return res.status(500).json({ message: err.message });
-  }
-};
-
 
 
 
