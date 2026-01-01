@@ -634,17 +634,29 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 
 // ----------- BULK UPLOAD DOCTORS -----------
+
 exports.bulkUploadDoctors = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
   }
 
   try {
-    const rows = await parseFile(req.file.path);
+    // ✅ READ EXCEL FILE
+    const workbook = XLSX.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+    // ✅ Convert to JSON
+    const rows = XLSX.utils.sheet_to_json(sheet, {
+      defval: "",   // IMPORTANT: prevents undefined
+      raw: false,
+      trim: true,
+    });
+
     fs.unlinkSync(req.file.path);
 
-    if (!rows || rows.length === 0) {
-      return res.status(400).json({ message: "Uploaded file is empty" });
+    if (!rows.length) {
+      return res.status(400).json({ message: "Excel file is empty" });
     }
 
     let successCount = 0;
@@ -655,75 +667,53 @@ exports.bulkUploadDoctors = async (req, res) => {
       const rowNumber = i + 2;
 
       try {
-        // Normalize headers
+        // ✅ Normalize headers
         const data = {};
         Object.keys(row).forEach((key) => {
           const cleanKey = key.toLowerCase().replace(/\s+/g, "");
-          data[cleanKey] = row[key];
+          data[cleanKey] = String(row[key]).trim();
         });
 
-        // Flexible header mapping
-        const name = String(data.name || "").trim();
-        const email = String(data.email || "").trim();
-        const password = String(data.password || "").trim();
-        const role = String(data.role || "").trim();
+        const name = data.name;
+        const email = data.email;
+        const password = data.password;
+        const role = data.role;
+        const doctorType = data.doctortype;
+        const specialtyName = data.specialty;
 
-        const doctorType = String(
-          data.doctortype || data.type || ""
-        ).trim();
+        const medicalLicenseNumber = String(
+          data.medicallicensenumber || ""
+        )
+          .replace(/\s+/g, "")
+          .trim();
 
-        const specialtyName = String(data.specialty || "").trim();
+        // ✅ VALIDATION WITH CLEAR ERROR
+        const missing = [];
+        if (!name) missing.push("name");
+        if (!email) missing.push("email");
+        if (!password) missing.push("password");
+        if (!doctorType) missing.push("doctorType");
+        if (!specialtyName) missing.push("specialty");
+        if (!medicalLicenseNumber) missing.push("medicalLicenseNumber");
 
-       const medicalLicenseNumber = String(
-  data.medicallicensenumber ||
-  data.medicallicense ||
-  data.licensenumber ||
-  ""
-)
-  .replace(/\s+/g, "")   // 🔥 removes ALL spaces (I-94906 D → I-94906D)
-  .trim();
-
-
-        // Validation
-        if (
-          !name ||
-          !email ||
-          !password ||
-          !doctorType ||
-          !specialtyName ||
-          !medicalLicenseNumber
-        ) {
-          const missing = [];
-if (!name) missing.push("name");
-if (!email) missing.push("email");
-if (!password) missing.push("password");
-if (!doctorType) missing.push("doctorType");
-if (!specialtyName) missing.push("specialty");
-if (!medicalLicenseNumber) missing.push("medicalLicenseNumber");
-
-if (missing.length) {
-  throw new Error(`Missing: ${missing.join(", ")}`);
-}
-
+        if (missing.length) {
+          throw new Error(`Missing: ${missing.join(", ")}`);
         }
 
-        if (role.toUpperCase() !== "DOCTOR") {
+        if (role?.toUpperCase() !== "DOCTOR") {
           throw new Error("Role must be DOCTOR");
         }
 
-        // Find specialty
-        const specialty = await Specialty.findOne({
+        // ✅ Find or create specialty
+        let specialty = await Specialty.findOne({
           name: new RegExp(`^${specialtyName}$`, "i"),
         });
 
-   
+        if (!specialty) {
+          specialty = await Specialty.create({ name: specialtyName });
+        }
 
-if (!specialty) {
-  specialty = await Specialty.create({ name: specialtyName });
-}
-
-
-        // Check existing user
+        // ✅ Create or reuse user
         let user = await User.findOne({ email });
 
         if (!user) {
@@ -736,7 +726,7 @@ if (!specialty) {
           });
         }
 
-        // Upsert doctor (NO department)
+        // ✅ Create / Update doctor (NO department)
         await Doctor.findOneAndUpdate(
           { userId: user._id },
           {
@@ -759,7 +749,9 @@ if (!specialty) {
     }
 
     return res.status(200).json({
-      message: errorRows.length ? "Some rows failed" : "Doctors uploaded successfully",
+      message: errorRows.length
+        ? "Some rows failed"
+        : "Doctors uploaded successfully",
       successCount,
       errorRows,
     });
@@ -771,6 +763,7 @@ if (!specialty) {
     });
   }
 };
+
 
 
 
