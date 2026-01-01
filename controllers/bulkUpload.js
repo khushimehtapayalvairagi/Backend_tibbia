@@ -713,9 +713,7 @@ if (missing.length) {
           name: new RegExp(`^${specialtyName}$`, "i"),
         });
 
-       let specialty = await Specialty.findOne({
-  name: new RegExp(`^${specialtyName}$`, "i"),
-});
+   
 
 if (!specialty) {
   specialty = await Specialty.create({ name: specialtyName });
