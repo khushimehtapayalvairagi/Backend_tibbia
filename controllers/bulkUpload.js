@@ -635,7 +635,7 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 // ----------- BULK UPLOAD DOCTORS -----------
 exports.bulkUploadDoctors = async (req, res) => {
-  if (!req.file) 
+  if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
 
   try {
@@ -645,7 +645,7 @@ exports.bulkUploadDoctors = async (req, res) => {
     // delete temp file
     fs.unlinkSync(req.file.path);
 
-    if (!data.length) 
+    if (!data.length)
       return res.status(400).json({ message: "Uploaded file is empty" });
 
     const errors = [];
@@ -653,125 +653,124 @@ exports.bulkUploadDoctors = async (req, res) => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const rowNum = i + 2; // +2 = approximate Excel row number
+      const rowNum = i + 2; // Excel row number approx.
 
       try {
-        // 🔹 Normalize headers: lower-case + trim + remove spaces
+        // ───────── Normalize headers ─────────
         const normalized = {};
         for (const key in row) {
           const cleanKey = key
+            .replace(/[\uFEFF\u200B]/g, "")  // remove BOM/hidden
             .trim()
             .toLowerCase()
-            .replace(/\s+/g, "");
+            .replace(/[^a-z0-9]/g, "");
+
           normalized[cleanKey] = row[key];
         }
 
+        // ───────── Pull values safely ─────────
         const name = String(normalized.name || "").trim();
         const email = String(normalized.email || "").trim();
         const password = String(normalized.password || "").trim();
-        const role = String(normalized.role || "").trim();
         const doctorType = String(normalized.doctortype || "").trim();
-        const specialty = String(normalized.specialty || "").trim();
-        const medicalLicenseNumber = String(
-          normalized.medicallicensenumber || ""
-        ).trim();
+        const specialtyRaw = String(normalized.specialty || "").trim();
+        const medicalLicense = String(normalized.medicallicensenumber || "").trim();
 
-        // ❗ Required validation
-        if (
-          !name ||
-          !email ||
-          !password ||
-          !doctorType ||
-          !specialty ||
-          !medicalLicenseNumber
-        ) {
+        // ───────── Required validation ─────────
+        if (!name || !email || !password || !doctorType || !specialtyRaw || !medicalLicense) {
           throw new Error("Missing required fields");
         }
 
-        if (role.toUpperCase() !== "DOCTOR") {
-          throw new Error("Role must be DOCTOR");
-        }
+        // ───────── Normalize specialty string ─────────
+        const specialtyClean = specialtyRaw
+          .replace(/\s+/g, " ")
+          .trim();
 
-        // 📌 Find specialty in database
+        // ───────── Specialty lookup ─────────
         const specialtyData = await Specialty.findOne({
-          name: new RegExp(`^${specialty}$`, "i"),
+          name: { $regex: `^${specialtyClean}$`, $options: "i" }
         });
 
         if (!specialtyData) {
-          throw new Error(
-            `Specialty '${specialty}' not found in database`
-          );
+          throw new Error(`Specialty '${specialtyClean}' not found`);
         }
 
-        // We treat department = specialty
-        const departmentData = specialtyData;
-
-        // ✅ If user already exists, update doctor record
+        // ───────── Check if user exists ─────────
         const existingUser = await User.findOne({ email });
 
         if (existingUser) {
-          await Doctor.findOneAndUpdate(
-            { userId: existingUser._id },
-            {
+          // If user exists, try to create/update doctor record
+
+          const existingDoctor = await Doctor.findOne({ userId: existingUser._id });
+
+          if (existingDoctor) {
+            // Update existing doctor info
+            await Doctor.findOneAndUpdate(
+              { userId: existingUser._id },
+              {
+                doctorType,
+                specialty: specialtyData._id,
+                medicalLicenseNumber: medicalLicense,
+                isActive: true
+              }
+            );
+          } else {
+            // Create doctor profile for existing user
+            await Doctor.create({
+              userId: existingUser._id,
               doctorType,
               specialty: specialtyData._id,
-              department: departmentData._id,
-              medicalLicenseNumber,
-              isActive: true,
-            },
-            { new: true }
-          );
+              medicalLicenseNumber: medicalLicense,
+              isActive: true
+            });
+          }
 
           successCount++;
           continue;
         }
 
-        // 🔐 Hash password and create new user
+        // ───────── New user creation ─────────
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await User.create({
           name,
           email,
           password: hashedPassword,
-          role: "DOCTOR",
+          role: "DOCTOR"
         });
 
-        // ➤ Create doctor profile
         await Doctor.create({
           userId: newUser._id,
           doctorType,
           specialty: specialtyData._id,
-          department: departmentData._id,
-          medicalLicenseNumber,
-          isActive: true,
+          medicalLicenseNumber: medicalLicense,
+          isActive: true
         });
 
         successCount++;
       } catch (err) {
-        // collect specific row errors
         errors.push({ row: rowNum, error: err.message });
       }
     }
 
     return res.status(200).json({
       message: errors.length
-        ? "Some rows failed"
+        ? "Upload done with some errors"
         : "Doctors uploaded successfully",
       successCount,
       errorRows: errors,
     });
   } catch (err) {
-    // cleanup on error
     if (req.file && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
-    console.error("Bulk upload failed:", err);
     return res.status(500).json({
       message: "Upload failed",
       error: err.message,
     });
   }
 };
+
 
 
 
