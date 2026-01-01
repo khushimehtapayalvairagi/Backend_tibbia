@@ -637,16 +637,26 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 // ----------- BULK UPLOAD DOCTORS -----------
 
+
 exports.bulkUploadDoctors = async (req, res) => {
-  if (!req.file) 
+  if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
+
+  // detect delimiter from first line
+  const firstLine = fs.readFileSync(req.file.path, "utf8").split("\n")[0];
+
+  let delimiter = ",";
+  if (firstLine.includes("\t")) delimiter = "\t";
+  else if (firstLine.includes(";")) delimiter = ";";
 
   const fileRows = [];
   const errors = [];
   let successCount = 0;
 
   fs.createReadStream(req.file.path)
-    .pipe(fastcsv.parse({ headers: true, trim: true }))
+    .pipe(
+      fastcsv.parse({ headers: true, trim: true, delimiter })
+    )
     .on("error", (error) => {
       console.error("CSV parse error:", error);
     })
@@ -668,7 +678,14 @@ exports.bulkUploadDoctors = async (req, res) => {
           const specialtyRaw = String(row.specialty || "").trim();
           const medicalLicense = String(row.medicalLicenseNumber || "").trim();
 
-          if (!name || !email || !password || !doctorType || !specialtyRaw || !medicalLicense) {
+          if (
+            !name ||
+            !email ||
+            !password ||
+            !doctorType ||
+            !specialtyRaw ||
+            !medicalLicense
+          ) {
             throw new Error("Missing required fields");
           }
 
@@ -683,11 +700,11 @@ exports.bulkUploadDoctors = async (req, res) => {
           let user = await User.findOne({ email });
 
           if (!user) {
-            const hashedPassword = await bcrypt.hash(password, 10);
+            const hashed = await bcrypt.hash(password, 10);
             user = await User.create({
               name,
               email,
-              password: hashedPassword,
+              password: hashed,
               role: "DOCTOR",
             });
           } else {
@@ -729,6 +746,7 @@ exports.bulkUploadDoctors = async (req, res) => {
       });
     });
 };
+
 
 
 
