@@ -649,7 +649,7 @@ exports.bulkUploadDoctors = async (req, res) => {
   defval: "",
   raw: false,
   trim: true,
-  range: 0, // 👈 SKIP FIRST ROW (TITLE ROW)
+  range:1, // 👈 SKIP FIRST ROW (TITLE ROW)
 });
 
     // remove uploaded file
