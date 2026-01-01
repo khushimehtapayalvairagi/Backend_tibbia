@@ -653,16 +653,13 @@ exports.bulkUploadDoctors = async (req, res) => {
 
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
-      const rowNum = i + 2; // +2 = approximate Excel row number
+      const rowNum = i + 2; // approximate Excel row number
 
       try {
-        // 🔹 Normalize headers: lower-case + trim + remove spaces
+        // Normalize headers
         const normalized = {};
         for (const key in row) {
-          const cleanKey = key
-            .trim()
-            .toLowerCase()
-            .replace(/\s+/g, "");
+          const cleanKey = key.trim().toLowerCase().replace(/\s+/g, "");
           normalized[cleanKey] = row[key];
         }
 
@@ -676,15 +673,8 @@ exports.bulkUploadDoctors = async (req, res) => {
           normalized.medicallicensenumber || ""
         ).trim();
 
-        // ❗ Required validation
-        if (
-          !name ||
-          !email ||
-          !password ||
-          !doctorType ||
-          !specialty ||
-          !medicalLicenseNumber
-        ) {
+        // Required validation
+        if (!name || !email || !password || !doctorType || !specialty || !medicalLicenseNumber) {
           throw new Error("Missing required fields");
         }
 
@@ -692,21 +682,18 @@ exports.bulkUploadDoctors = async (req, res) => {
           throw new Error("Role must be DOCTOR");
         }
 
-        // 📌 Find specialty in database
+        // Find specialty in database
         const specialtyData = await Specialty.findOne({
           name: new RegExp(`^${specialty}$`, "i"),
         });
 
         if (!specialtyData) {
-          throw new Error(
-            `Specialty '${specialty}' not found in database`
-          );
+          throw new Error(`Specialty '${specialty}' not found in database`);
         }
 
-        // We treat department = specialty
-        const departmentData = specialtyData;
+        // ✅ Remove department completely
 
-        // ✅ If user already exists, update doctor record
+        // If user exists, update doctor record
         const existingUser = await User.findOne({ email });
 
         if (existingUser) {
@@ -715,18 +702,16 @@ exports.bulkUploadDoctors = async (req, res) => {
             {
               doctorType,
               specialty: specialtyData._id,
-              department: departmentData._id,
               medicalLicenseNumber,
               isActive: true,
             },
             { new: true }
           );
-
           successCount++;
           continue;
         }
 
-        // 🔐 Hash password and create new user
+        // Create new user
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const newUser = await User.create({
@@ -736,27 +721,24 @@ exports.bulkUploadDoctors = async (req, res) => {
           role: "DOCTOR",
         });
 
-        // ➤ Create doctor profile
+        // Create doctor profile WITHOUT department
         await Doctor.create({
           userId: newUser._id,
           doctorType,
           specialty: specialtyData._id,
-          department: departmentData._id,
           medicalLicenseNumber,
           isActive: true,
         });
 
         successCount++;
       } catch (err) {
-        // collect specific row errors
+        // Collect row-specific errors
         errors.push({ row: rowNum, error: err.message });
       }
     }
 
     return res.status(200).json({
-      message: errors.length
-        ? "Some rows failed"
-        : "Doctors uploaded successfully",
+      message: errors.length ? "Some rows failed" : "Doctors uploaded successfully",
       successCount,
       errorRows: errors,
     });
@@ -766,10 +748,7 @@ exports.bulkUploadDoctors = async (req, res) => {
       fs.unlinkSync(req.file.path);
     }
     console.error("Bulk upload failed:", err);
-    return res.status(500).json({
-      message: "Upload failed",
-      error: err.message,
-    });
+    return res.status(500).json({ message: "Upload failed", error: err.message });
   }
 };
 
