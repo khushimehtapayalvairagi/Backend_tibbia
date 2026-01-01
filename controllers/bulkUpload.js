@@ -690,7 +690,18 @@ exports.bulkUploadDoctors = async (req, res) => {
           !specialtyName ||
           !medicalLicenseNumber
         ) {
-          throw new Error("Missing required fields");
+          const missing = [];
+if (!name) missing.push("name");
+if (!email) missing.push("email");
+if (!password) missing.push("password");
+if (!doctorType) missing.push("doctorType");
+if (!specialtyName) missing.push("specialty");
+if (!medicalLicenseNumber) missing.push("medicalLicenseNumber");
+
+if (missing.length) {
+  throw new Error(`Missing: ${missing.join(", ")}`);
+}
+
         }
 
         if (role.toUpperCase() !== "DOCTOR") {
@@ -702,9 +713,14 @@ exports.bulkUploadDoctors = async (req, res) => {
           name: new RegExp(`^${specialtyName}$`, "i"),
         });
 
-        if (!specialty) {
-          throw new Error(`Specialty '${specialtyName}' not found`);
-        }
+       let specialty = await Specialty.findOne({
+  name: new RegExp(`^${specialtyName}$`, "i"),
+});
+
+if (!specialty) {
+  specialty = await Specialty.create({ name: specialtyName });
+}
+
 
         // Check existing user
         let user = await User.findOne({ email });
