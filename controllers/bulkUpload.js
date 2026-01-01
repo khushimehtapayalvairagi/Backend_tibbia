@@ -649,7 +649,7 @@ exports.bulkUploadDoctors = async (req, res) => {
     const sheet = workbook.Sheets[sheetName];
 
     // ✅ Convert to JSON
-    const rows = XLSX.utils.sheet_to_json(sheet, {
+    const rows = xlsx.utils.sheet_to_json(sheet, {
       defval: "",   // IMPORTANT: prevents undefined
       raw: false,
       trim: true,
