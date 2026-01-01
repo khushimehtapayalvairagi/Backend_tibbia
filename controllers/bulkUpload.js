@@ -635,6 +635,8 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 // ----------- BULK UPLOAD DOCTORS -----------
 
+
+
 exports.bulkUploadDoctors = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
@@ -642,7 +644,7 @@ exports.bulkUploadDoctors = async (req, res) => {
 
   try {
     // ✅ READ EXCEL FILE
-    const workbook = XLSX.readFile(req.file.path);
+    const workbook = xlsx.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
