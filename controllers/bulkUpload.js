@@ -645,11 +645,12 @@ exports.bulkUploadDoctors = async (req, res) => {
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
-    const rows = xlsx.utils.sheet_to_json(sheet, {
-      defval: "",
-      raw: false,
-      trim: true,
-    });
+   const rows = xlsx.utils.sheet_to_json(sheet, {
+  defval: "",
+  raw: false,
+  trim: true,
+  range: 0, // 👈 SKIP FIRST ROW (TITLE ROW)
+});
 
     // remove uploaded file
     fs.unlinkSync(req.file.path);
