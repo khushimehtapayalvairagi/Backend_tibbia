@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
+const fastcsv = require("fast-csv");
 
 const xlsx = require("xlsx");
 const bcrypt = require("bcrypt");
@@ -637,7 +638,7 @@ exports.bulkUploadDepartment = async (req, res) => {
 // ----------- BULK UPLOAD DOCTORS -----------
 
 exports.bulkUploadDoctors = async (req, res) => {
-  if (!req.file)
+  if (!req.file) 
     return res.status(400).json({ message: "No file uploaded" });
 
   const fileRows = [];
@@ -645,7 +646,10 @@ exports.bulkUploadDoctors = async (req, res) => {
   let successCount = 0;
 
   fs.createReadStream(req.file.path)
-    .pipe(csv.parse({ headers: true, trim: true }))
+    .pipe(fastcsv.parse({ headers: true, trim: true }))
+    .on("error", (error) => {
+      console.error("CSV parse error:", error);
+    })
     .on("data", (row) => {
       fileRows.push(row);
     })
@@ -657,53 +661,44 @@ exports.bulkUploadDoctors = async (req, res) => {
         const rowNum = i + 2;
 
         try {
-          const name = (row.name || "").trim();
-          const email = (row.email || "").trim().toLowerCase();
-          const password = (row.password || "").trim();
-          const doctorType = (row.doctorType || "").trim();
-          const specialtyRaw = (row.specialty || "").trim();
-          const medicalLicense = (row.medicalLicenseNumber || "").trim();
-          const role = (row.role || "").trim().toUpperCase();
+          const name = String(row.name || "").trim();
+          const email = String(row.email || "").trim().toLowerCase();
+          const password = String(row.password || "").trim();
+          const doctorType = String(row.doctorType || "").trim();
+          const specialtyRaw = String(row.specialty || "").trim();
+          const medicalLicense = String(row.medicalLicenseNumber || "").trim();
 
           if (!name || !email || !password || !doctorType || !specialtyRaw || !medicalLicense) {
             throw new Error("Missing required fields");
           }
-          if (role !== "DOCTOR") {
-            throw new Error("Role must be DOCTOR");
-          }
 
-          // Find specialty
           const specialtyData = await Specialty.findOne({
             name: new RegExp(`^${specialtyRaw}$`, "i"),
           });
+
           if (!specialtyData) {
             throw new Error(`Specialty '${specialtyRaw}' not found`);
           }
 
-          // User exist?
           let user = await User.findOne({ email });
 
           if (!user) {
-            // create user if not exist
             const hashedPassword = await bcrypt.hash(password, 10);
             user = await User.create({
               name,
               email,
-              role: "DOCTOR",
               password: hashedPassword,
+              role: "DOCTOR",
             });
           } else {
-            // update user name and role
             user.name = name;
             user.role = "DOCTOR";
             await user.save();
           }
 
-          // doctor exist?
           let doctor = await Doctor.findOne({ userId: user._id });
 
           if (!doctor) {
-            // create doctor record
             await Doctor.create({
               userId: user._id,
               doctorType,
@@ -712,7 +707,6 @@ exports.bulkUploadDoctors = async (req, res) => {
               isActive: true,
             });
           } else {
-            // update doctor record
             doctor.doctorType = doctorType;
             doctor.specialty = specialtyData._id;
             doctor.medicalLicenseNumber = medicalLicense;
@@ -735,7 +729,6 @@ exports.bulkUploadDoctors = async (req, res) => {
       });
     });
 };
-
 
 
 
