@@ -1,7 +1,6 @@
 const fs = require("fs");
 const path = require("path");
 const csv = require("csv-parser");
-const csv = require("fast-csv");
 
 const xlsx = require("xlsx");
 const bcrypt = require("bcrypt");
