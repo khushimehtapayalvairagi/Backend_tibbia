@@ -634,26 +634,23 @@ exports.bulkUploadDepartment = async (req, res) => {
 
 
 // ----------- BULK UPLOAD DOCTORS -----------
-
-
-
 exports.bulkUploadDoctors = async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
   }
 
   try {
-    // ✅ READ EXCEL FILE
+    // ✅ READ EXCEL FILE (XLSX ONLY)
     const workbook = xlsx.readFile(req.file.path);
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
-    // ✅ Convert to JSON
     const rows = xlsx.utils.sheet_to_json(sheet, {
-      defval: "",   // IMPORTANT: prevents undefined
+      defval: "",
       raw: false,
       trim: true,
     });
+    
 
     fs.unlinkSync(req.file.path);
 
@@ -665,17 +662,17 @@ exports.bulkUploadDoctors = async (req, res) => {
     const errorRows = [];
 
     for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
       const rowNumber = i + 2;
 
       try {
         // ✅ Normalize headers
         const data = {};
-        Object.keys(row).forEach((key) => {
+        Object.keys(rows[i]).forEach((key) => {
           const cleanKey = key.toLowerCase().replace(/\s+/g, "");
-          data[cleanKey] = String(row[key]).trim();
+          data[cleanKey] = String(rows[i][key]).trim();
         });
 
+        // ✅ FIELD MAPPING (MATCHES YOUR EXCEL)
         const name = data.name;
         const email = data.email;
         const password = data.password;
@@ -684,12 +681,12 @@ exports.bulkUploadDoctors = async (req, res) => {
         const specialtyName = data.specialty;
 
         const medicalLicenseNumber = String(
-          data.medicallicensenumber || ""
+          data.medicallicense || ""
         )
           .replace(/\s+/g, "")
           .trim();
 
-        // ✅ VALIDATION WITH CLEAR ERROR
+        // ✅ VALIDATION
         const missing = [];
         if (!name) missing.push("name");
         if (!email) missing.push("email");
@@ -702,11 +699,11 @@ exports.bulkUploadDoctors = async (req, res) => {
           throw new Error(`Missing: ${missing.join(", ")}`);
         }
 
-        if (role?.toUpperCase() !== "DOCTOR") {
+        if (role.toUpperCase() !== "DOCTOR") {
           throw new Error("Role must be DOCTOR");
         }
 
-        // ✅ Find or create specialty
+        // ✅ FIND OR CREATE SPECIALTY
         let specialty = await Specialty.findOne({
           name: new RegExp(`^${specialtyName}$`, "i"),
         });
@@ -715,7 +712,7 @@ exports.bulkUploadDoctors = async (req, res) => {
           specialty = await Specialty.create({ name: specialtyName });
         }
 
-        // ✅ Create or reuse user
+        // ✅ FIND OR CREATE USER
         let user = await User.findOne({ email });
 
         if (!user) {
@@ -728,7 +725,7 @@ exports.bulkUploadDoctors = async (req, res) => {
           });
         }
 
-        // ✅ Create / Update doctor (NO department)
+        // ✅ UPSERT DOCTOR (NO DEPARTMENT)
         await Doctor.findOneAndUpdate(
           { userId: user._id },
           {
@@ -765,7 +762,6 @@ exports.bulkUploadDoctors = async (req, res) => {
     });
   }
 };
-
 
 
 
