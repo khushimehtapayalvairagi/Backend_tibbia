@@ -805,7 +805,7 @@ const getAllManualChargeItemsHandler = async (req, res) => {
 
 const getAllStaffHandler = async (req, res) => {
     try {
-        const staffList = await Staff.find().populate('userId', 'name email').populate('department', 'name');
+        const staffList = await Staff.find().populate('userId', 'name email');
         res.status(200).json({ staff: staffList });
     } catch (error) {
         console.error('Fetch Staff Error:', error);
