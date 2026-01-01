@@ -674,12 +674,15 @@ exports.bulkUploadDoctors = async (req, res) => {
 
         const specialtyName = String(data.specialty || "").trim();
 
-        const medicalLicenseNumber = String(
-          data.medicallicensenumber ||
-          data.medicallicense ||
-          data.licensenumber ||
-          ""
-        ).trim();
+       const medicalLicenseNumber = String(
+  data.medicallicensenumber ||
+  data.medicallicense ||
+  data.licensenumber ||
+  ""
+)
+  .replace(/\s+/g, "")   // 🔥 removes ALL spaces (I-94906 D → I-94906D)
+  .trim();
+
 
         // Validation
         if (
