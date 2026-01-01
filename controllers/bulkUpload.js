@@ -824,9 +824,43 @@ exports.bulkUploadStaff = async (req, res) => {
           });
         }
 
+        // Prepare staff payload
+        const staffPayload = {
+          userId: user._id,
+          designation,
+          isActive: true
+        };
 
+        // Only set contactNumber if present
+        if (contactNumberRaw) {
+          staffPayload.contactNumber = contactNumberRaw;
+        }
+
+        // Upsert staff (NO SKIP)
+        await Staff.findOneAndUpdate(
+          { userId: user._id },
+          staffPayload,
+          { upsert: true, new: true }
+        );
+
+        successCount++;
+      } catch (err) {
+        errors.push({ row: rowNum, error: err.message });
       }
     }
+
+    return res.status(200).json({
+      message: "Staff bulk upload completed",
+      successCount,
+      errorCount: errors.length,
+      errorRows: errors
+    });
+
+  } catch (err) {
+    console.error("Bulk upload error:", err);
+    return res.status(500).json({ message: err.message });
+  }
+};
 
 
 
