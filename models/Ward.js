@@ -1,11 +1,14 @@
 const mongoose = require('mongoose');
 
 const BedSchema = new mongoose.Schema({
-     beds: [
-    { bedNumber: Number, status: String }  // available or occupied
-  ],
-    status: { type: String, enum: ['available', 'occupied', 'cleaning'], default: 'available' }
+  bedNumber: { type: Number, required: true },
+  status: {
+    type: String,
+    enum: ['available', 'occupied', 'cleaning'],
+    default: 'available'
+  }
 });
+
 
 const WardSchema = new mongoose.Schema({
     name: { type: String, required: true },
