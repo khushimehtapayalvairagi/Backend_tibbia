@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const Ward = require("./models/Ward"); // Adjust path if needed
+const Ward = require("./models/Ward");
 
 mongoose
   .connect(
@@ -11,46 +11,51 @@ mongoose
     const wards = await Ward.find();
 
     for (const ward of wards) {
-      let newBeds = [];
+      let expandedBeds = [];
 
-      for (const b of ward.beds) {
-        const p = String(b.bedNumber).trim().toLowerCase();
+      for (const bed of ward.beds) {
+        const raw = String(bed.bedNumber).trim();
 
-        if (p.includes("to")) {
-          const parts = p.split(" ");
-          const startNum = parseInt(parts[0]);
-          const endNum = parseInt(parts[2]);
-          if (!isNaN(startNum) && !isNaN(endNum)) {
-            for (let i = startNum; i <= endNum; i++) {
-              newBeds.push({ bedNumber: i, status: b.status });
+        // RANGE: "1 To 15", "61 To 70"
+        if (/^\d+\s*to\s*\d+$/i.test(raw)) {
+          const [start, end] = raw
+            .toLowerCase()
+            .split("to")
+            .map((n) => parseInt(n.trim()));
+
+          if (!isNaN(start) && !isNaN(end)) {
+            for (let i = start; i <= end; i++) {
+              expandedBeds.push({
+                bedNumber: i,
+                status: bed.status || "available",
+              });
             }
           }
-        } else {
-          const num = parseInt(p);
-          if (!isNaN(num)) {
-            newBeds.push({ bedNumber: num, status: b.status });
-          }
+        }
+        // SINGLE: "77"
+        else if (!isNaN(parseInt(raw))) {
+          expandedBeds.push({
+            bedNumber: parseInt(raw),
+            status: bed.status || "available",
+          });
         }
       }
 
-      // Deduplicate and sort numeric beds
-      const uniqueBeds = [];
-      const seen = {};
-      newBeds
-        .sort((a, b) => a.bedNumber - b.bedNumber)
-        .forEach((bed) => {
-          if (!seen[bed.bedNumber]) {
-            seen[bed.bedNumber] = true;
-            uniqueBeds.push(bed);
-          }
-        });
+      // Remove duplicates + sort
+      const uniqueMap = {};
+      expandedBeds.forEach((b) => {
+        uniqueMap[b.bedNumber] = b;
+      });
 
-      ward.beds = uniqueBeds;
+      ward.beds = Object.values(uniqueMap).sort(
+        (a, b) => a.bedNumber - b.bedNumber
+      );
+
       await ward.save();
-      console.log(`Migrated ward: ${ward.name}`);
+      console.log(`✔ Migrated ward: ${ward.name}`);
     }
 
-    console.log("Migration complete!");
+    console.log("🎉 Migration complete!");
     process.exit(0);
   })
   .catch((err) => {
