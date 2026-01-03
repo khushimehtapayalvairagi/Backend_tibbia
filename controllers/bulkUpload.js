@@ -335,9 +335,8 @@ exports.bulkUploadProcedures = async (req, res) => {
 
 
 exports.bulkUploadWards = async (req, res) => {
-  if (!req.file) {
+  if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
-  }
 
   let workbook;
   try {
@@ -355,85 +354,78 @@ exports.bulkUploadWards = async (req, res) => {
   const wardsToInsert = [];
 
   for (let i = 0; i < data.length; i++) {
-    const excelRow = i + 2;
+    const rowIndex = i + 2;
     const row = data[i];
 
     const name = String(row.name || "").trim();
-    const roomCategoryName = String(row.roomCategory || "").trim();
+    const roomCatName = String(row.roomCategory || "").trim();
     const bedsStr = String(row.beds || "").trim();
 
-    if (!name || !roomCategoryName || !bedsStr) {
-      errorRows.push(excelRow);
+    if (!name || !roomCatName || !bedsStr) {
+      errorRows.push(rowIndex);
       continue;
     }
 
-    const roomCategory = await RoomCategory.findOne({
-      $or: [{ name: roomCategoryName }, { description: roomCategoryName }]
+    const roomCat = await RoomCategory.findOne({
+      $or: [{ name: roomCatName }, { description: roomCatName }],
     });
 
-    if (!roomCategory) {
-      errorRows.push(excelRow);
+    if (!roomCat) {
+      errorRows.push(rowIndex);
       continue;
     }
 
-// parse ranges like "1 To 15" or single values like "77"
-const beds = [];
+    const parts = bedsStr.split(",").map((x) => x.trim()).filter(Boolean);
+    const beds = [];
 
-const parts = bedsStr.split(",").map(x => x.trim()).filter(Boolean);
-
-for (const p of parts) {
-  // if it's a range
-  if (p.toLowerCase().includes("to")) {
-    const [start, , end] = p.split(" ");
-    const startNum = parseInt(start);
-    const endNum = parseInt(end);
-    if (!isNaN(startNum) && !isNaN(endNum)) {
-      for (let i = startNum; i <= endNum; i++) {
-        beds.push({
-          bedNumber: i,
-          status: "available"
-        });
+    for (const p of parts) {
+      const lower = p.toLowerCase();
+      if (lower.includes("to")) {
+        const [startStr, , endStr] = p.split(" ");
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let num = start; num <= end; num++) {
+            beds.push({ bedNumber: num, status: "available" });
+          }
+        }
+      } else {
+        const num = parseInt(p);
+        if (!isNaN(num)) {
+          beds.push({ bedNumber: num, status: "available" });
+        }
       }
     }
-  } else {
-    // single bed
-    const num = parseInt(p);
-    if (!isNaN(num)) {
-      beds.push({ bedNumber: num, status: "available" });
+
+    if (!beds.length) {
+      errorRows.push(rowIndex);
+      continue;
     }
-  }
-}
-
-if (!beds.length) {
-  errorRows.push(excelRow);
-  continue;
-}
-
 
     wardsToInsert.push({
       name,
-      roomCategory: roomCategory._id,
-      beds
+      roomCategory: roomCat._id,
+      beds,
     });
   }
 
   if (errorRows.length > 0) {
     return res.status(400).json({
       message: "Validation failed at rows",
-      errorRows
+      errorRows,
     });
   }
 
   try {
-    await Ward.insertMany(wardsToInsert, { ordered: true }); // insert ALL
+    await Ward.insertMany(wardsToInsert, { ordered: true });
     res.json({
       message: "Wards uploaded successfully",
-      count: wardsToInsert.length
+      count: wardsToInsert.length,
     });
   } catch (err) {
     res.status(500).json({
       message: "Upload failed",
-      error: err.message
+      error: err.message,
     });
   }
 };
