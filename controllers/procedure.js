@@ -8,7 +8,7 @@ exports.scheduleProcedure = async (req, res) => {
         const {
      
             patientId, ipdAdmissionId, procedureType, roomId,  labourRoomId, scheduledDateTime,
-            procedureId, surgeonId, assistantIds, anestheticId
+            procedureId, surgeonId, assistantIds
         } = req.body;
 
         if (!patientId || !procedureType || !scheduledDateTime || !procedureId || !surgeonId) {
@@ -37,7 +37,7 @@ else finalProcedureType = procedureType;
             procedureId,
             surgeonId,
             assistantIds,
-            anestheticId
+            
         });
 
         await procedure.save();
@@ -59,7 +59,7 @@ exports.getSchedulesByPatient = async (req, res) => {
              .populate([
     { path: 'procedureId' },
     { path: 'surgeonId', populate: { path: 'userId',  model:"User",select: 'name email' } },
-    { path: 'anestheticId', populate: { path: 'userId', select: 'name email' } },
+    // { path: 'anestheticId', populate: { path: 'userId', select: 'name email' } },
      { path: 'roomId', select: 'name' },
     { path: 'labourRoomId', select: 'name' },
     { path: 'assistantIds',  select: 'name' } 
