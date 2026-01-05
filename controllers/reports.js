@@ -587,12 +587,12 @@ exports.getOTProcedureRegister = async (req, res) => {
     }
   : null,
 
-      specialty: s.surgeonId?.specialty
-        ? {
-            _id: s.surgeonId.specialty._id,
-            name: s.surgeonId.specialty.name
-          }
-        : null
+      // specialty: s.surgeonId?.specialty
+      //   ? {
+      //       _id: s.surgeonId.specialty._id,
+      //       name: s.surgeonId.specialty.name
+      //     }
+      //   : null
     }));
 
     res.status(200).json(formatted);
@@ -639,7 +639,7 @@ exports.getAnesthesiaRegister = async (req, res) => {
         rec.anestheticId.userId?.name ||  // Doctor
         rec.anestheticId.name ||          // User
         "N/A",
-      specialty: rec.anestheticId.specialty?.name
+
     }
   : null,
 
