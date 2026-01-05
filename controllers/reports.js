@@ -514,15 +514,22 @@ exports.getDepartmentWiseIPDRegister = async (req, res) => {
         status: ad.status,
         bedNumber: ad.bedNumber,
         patient: ad.patientId,
+         ward: ad.wardId
+    ? {
+        _id: ad.wardId._id,
+        name: ad.wardId.name
+      }
+    : null,
         doctor: ad.admittingDoctorId
           ? {
               _id: ad.admittingDoctorId._id,
               name: ad.admittingDoctorId.userId?.name
             }
           : null
+          
       });
     }
-
+            
     res.status(200).json(Object.values(specialtyMap));
 
   } catch (error) {
