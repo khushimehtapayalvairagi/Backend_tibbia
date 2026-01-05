@@ -481,6 +481,7 @@ exports.getDepartmentWiseIPDRegister = async (req, res) => {
     // Fetch IPD admissions
     const admissions = await IPDAdmission.find(match)
       .populate('patientId', 'fullName patientId')
+        .populate('wardId', 'name')
       .populate({
         path: 'admittingDoctorId',
         populate: [
@@ -552,6 +553,7 @@ exports.getOTProcedureRegister = async (req, res) => {
     const schedules = await ProcedureSchedule.find(match)
       .populate('procedureId', 'name cost')
       .populate('patientId', 'fullName patientId')
+      
       .populate({
         path: 'surgeonId',
         populate: [
@@ -575,12 +577,16 @@ exports.getOTProcedureRegister = async (req, res) => {
       status: s.status,
       procedure: s.procedureId,
       patient: s.patientId,
-      surgeon: s.surgeonId
-        ? {
-            _id: s.surgeonId._id,
-            name: s.surgeonId.userId?.name
-          }
-        : null,
+     surgeon: s.surgeonId
+  ? {
+      _id: s.surgeonId._id,
+      name:
+        s.surgeonId.userId?.name ||   // Doctor → User
+        s.surgeonId.name ||           // If surgeonId is User
+        "N/A"
+    }
+  : null,
+
       specialty: s.surgeonId?.specialty
         ? {
             _id: s.surgeonId.specialty._id,
@@ -626,13 +632,17 @@ exports.getAnesthesiaRegister = async (req, res) => {
     const result = records.map(rec => ({
       _id: rec._id,
       patient: rec.patientId || null,
-      anesthetist: rec.anestheticId
-        ? {
-            _id: rec.anestheticId._id,
-            name: rec.anestheticId.userId?.name,
-            specialty: rec.anestheticId.specialty?.name
-          }
-        : null,
+     anesthetist: rec.anestheticId
+  ? {
+      _id: rec.anestheticId._id,
+      name:
+        rec.anestheticId.userId?.name ||  // Doctor
+        rec.anestheticId.name ||          // User
+        "N/A",
+      specialty: rec.anestheticId.specialty?.name
+    }
+  : null,
+
       anesthesiaType: rec.anesthesiaType,
       anesthesiaName: rec.anesthesiaName,
       procedureType: rec.procedureType,
