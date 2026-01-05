@@ -4,6 +4,7 @@ const Patient = require('../models/Patient');
 const IPDAdmission = require('../models/IPDAdmission');
 const ProcedureSchedule = require('../models/ProcedureSchedule');
 const Department = require('../models/Department');
+
 const AnesthesiaRecord = require('../models/AnesthesiaRecord');
 const FumigationEntry = require('../models/FumigationEntry');
 const LabourRoomDetail = require('../models/LabourRoomDetail');
@@ -14,10 +15,11 @@ const mongoose = require('mongoose');
 
 exports.getCentralOPDRegister = async (req, res) => {
   try {
-    const { startDate, endDate, doctorId, departmentId } = req.query;
+    const { startDate, endDate, doctorId, specialtyId } = req.query;
 
     const query = {};
 
+    // Date filter
     if (startDate && endDate) {
       query.consultationDateTime = {
         $gte: new Date(startDate),
@@ -25,31 +27,42 @@ exports.getCentralOPDRegister = async (req, res) => {
       };
     }
 
-  if (doctorId && departmentId) {
-  // Find doctors in the department and check if the doctorId is among them
-  const doctors = await Doctor.find({ department: departmentId }, '_id');
-  const validDoctorIds = doctors.map(doc => doc._id.toString());
+    // Doctor + Specialty filter
+    if (doctorId && specialtyId) {
+      const doctors = await Doctor.find(
+        { specialty: specialtyId },
+        "_id"
+      );
 
-  if (validDoctorIds.includes(doctorId)) {
-    query.doctorId = doctorId;
-  } else {
-    // doctor doesn't belong to selected department — skip or return empty
-    return res.status(200).json({ consultations: [] });
-  }
-} else if (doctorId) {
-  query.doctorId = doctorId;
-} else if (departmentId) {
-  const doctors = await Doctor.find({ department: departmentId }, '_id');
-  const doctorIds = doctors.map(doc => doc._id);
-  query.doctorId = { $in: doctorIds };
-}
+      const validDoctorIds = doctors.map(doc => doc._id.toString());
 
+      if (validDoctorIds.includes(doctorId)) {
+        query.doctorId = doctorId;
+      } else {
+        return res.status(200).json({ consultations: [] });
+      }
+
+    } else if (doctorId) {
+      query.doctorId = doctorId;
+
+    } else if (specialtyId) {
+      const doctors = await Doctor.find(
+        { specialty: specialtyId },
+        "_id"
+      );
+
+      const doctorIds = doctors.map(doc => doc._id);
+      query.doctorId = { $in: doctorIds };
+    }
 
     const consultations = await OPDConsultation.find(query)
       .populate({
         path: 'visitId',
         populate: [
-          { path: 'assignedDoctorId', populate: { path: 'userId', select: 'name email' } },
+          {
+            path: 'assignedDoctorId',
+            populate: { path: 'userId', select: 'name email' }
+          },
           { path: 'referredBy', select: 'name contactNumber' }
         ]
       })
@@ -61,7 +74,6 @@ exports.getCentralOPDRegister = async (req, res) => {
         path: 'doctorId',
         populate: [
           { path: 'userId', select: 'name email' },
-          { path: 'department', select: 'name' },
           { path: 'specialty', select: 'name' }
         ]
       })
@@ -72,17 +84,80 @@ exports.getCentralOPDRegister = async (req, res) => {
       .sort({ consultationDateTime: -1 });
 
     res.status(200).json({ consultations });
+
   } catch (error) {
     console.error('Central OPD Report Error:', error);
-    res.status(500).json({ message: 'Server error while generating OPD register.' });
+    res.status(500).json({
+      message: 'Server error while generating OPD register.'
+    });
   }
 };
 
 
 
+
+// exports.getDepartmentWiseOPDRegister = async (req, res) => {
+//   try {
+//     const { startDate, endDate, departmentId } = req.query;
+
+//     const dateFilter = {};
+//     if (startDate && endDate) {
+//       dateFilter.consultationDateTime = {
+//         $gte: new Date(startDate),
+//         $lte: new Date(endDate),
+//       };
+//     }
+
+  
+//     let doctorQuery = {};
+//     if (departmentId) {
+//       doctorQuery.department = departmentId;
+//     }
+//     const doctors = await Doctor.find(doctorQuery).select('_id department').populate('department');
+//     const doctorMap = {};
+//     const doctorIds = doctors.map(doc => {
+//       doctorMap[doc._id.toString()] = doc.department;
+//       return doc._id;
+//     });
+
+//     const consultations = await OPDConsultation.find({
+//       ...dateFilter,
+//       doctorId: { $in: doctorIds }
+//     })
+//       .populate({
+//         path: 'patientId',
+//         select: 'fullName age gender patientId'
+//       })
+//       .populate({
+//         path: 'doctorId',
+//         populate: [
+//           { path: 'userId', select: 'name email' },
+//           { path: 'department', select: 'name' },
+//           { path: 'specialty', select: 'name' }
+//         ]
+//       })
+//       .sort({ consultationDateTime: -1 });
+
+ 
+//     const departmentGroups = {};
+//     consultations.forEach(c => {
+//       const deptName = c.doctorId?.department?.name || 'Unknown';
+//       if (!departmentGroups[deptName]) {
+//         departmentGroups[deptName] = [];
+//       }
+//       departmentGroups[deptName].push(c);
+//     });
+
+//     res.status(200).json({ departmentWiseRegister: departmentGroups });
+//   } catch (error) {
+//     console.error('Department-wise OPD Report Error:', error);
+//     res.status(500).json({ message: 'Server error while generating department-wise OPD register.' });
+//   }
+// };
+
 exports.getDepartmentWiseOPDRegister = async (req, res) => {
   try {
-    const { startDate, endDate, departmentId } = req.query;
+    const { startDate, endDate, specialtyId } = req.query;
 
     const dateFilter = {};
     if (startDate && endDate) {
@@ -92,18 +167,19 @@ exports.getDepartmentWiseOPDRegister = async (req, res) => {
       };
     }
 
-  
+    // Step 1: Find doctors by specialty (if provided)
     let doctorQuery = {};
-    if (departmentId) {
-      doctorQuery.department = departmentId;
+    if (specialtyId) {
+      doctorQuery.specialty = specialtyId;
     }
-    const doctors = await Doctor.find(doctorQuery).select('_id department').populate('department');
-    const doctorMap = {};
-    const doctorIds = doctors.map(doc => {
-      doctorMap[doc._id.toString()] = doc.department;
-      return doc._id;
-    });
 
+    const doctors = await Doctor.find(doctorQuery)
+      .select('_id specialty')
+      .populate('specialty', 'name');
+
+    const doctorIds = doctors.map(doc => doc._id);
+
+    // Step 2: Fetch OPD consultations
     const consultations = await OPDConsultation.find({
       ...dateFilter,
       doctorId: { $in: doctorIds }
@@ -116,28 +192,37 @@ exports.getDepartmentWiseOPDRegister = async (req, res) => {
         path: 'doctorId',
         populate: [
           { path: 'userId', select: 'name email' },
-          { path: 'department', select: 'name' },
           { path: 'specialty', select: 'name' }
         ]
       })
       .sort({ consultationDateTime: -1 });
 
- 
-    const departmentGroups = {};
+    // Step 3: Group consultations by specialty
+    const specialtyGroups = {};
+
     consultations.forEach(c => {
-      const deptName = c.doctorId?.department?.name || 'Unknown';
-      if (!departmentGroups[deptName]) {
-        departmentGroups[deptName] = [];
+      const specialtyName =
+        c.doctorId?.specialty?.name || 'Unknown Specialty';
+
+      if (!specialtyGroups[specialtyName]) {
+        specialtyGroups[specialtyName] = [];
       }
-      departmentGroups[deptName].push(c);
+
+      specialtyGroups[specialtyName].push(c);
     });
 
-    res.status(200).json({ departmentWiseRegister: departmentGroups });
+    res.status(200).json({
+      specialtyWiseRegister: specialtyGroups
+    });
+
   } catch (error) {
-    console.error('Department-wise OPD Report Error:', error);
-    res.status(500).json({ message: 'Server error while generating department-wise OPD register.' });
+    console.error('Specialty-wise OPD Report Error:', error);
+    res.status(500).json({
+      message: 'Server error while generating specialty-wise OPD register.'
+    });
   }
 };
+
 
 
 exports.getNewVsOldOPDPatients = async (req, res) => {
@@ -186,20 +271,20 @@ exports.getNewVsOldOPDPatients = async (req, res) => {
 };
 
 
-
 exports.getDoctorWiseOPDRegister = async (req, res) => {
   try {
-    const { startDate, endDate, departmentId } = req.query;
+    const { startDate, endDate, specialtyId } = req.query;
 
+    // Doctor filter
     const doctorFilter = {};
-    if (departmentId) {
-      doctorFilter.department = departmentId;
+    if (specialtyId) {
+      doctorFilter.specialty = specialtyId;
     }
 
+    // Fetch doctors
     const doctors = await Doctor.find(doctorFilter)
       .populate('userId', 'name email')
-      .populate('specialty', 'name')
-      .populate('department', 'name');
+      .populate('specialty', 'name');
 
     const start = startDate ? new Date(startDate) : new Date('2000-01-01');
     const end = endDate ? new Date(endDate) : new Date();
@@ -218,9 +303,8 @@ exports.getDoctorWiseOPDRegister = async (req, res) => {
         results.push({
           doctor: {
             _id: doctor._id,
-            name: doctor.userId.name,
-            specialty: doctor.specialty.name,
-            department: doctor.department?.name || 'N/A'
+            name: doctor.userId?.name || 'N/A',
+            specialty: doctor.specialty?.name || 'N/A'
           },
           totalConsultations: consultations.length,
           consultations
@@ -229,37 +313,49 @@ exports.getDoctorWiseOPDRegister = async (req, res) => {
     }
 
     res.status(200).json(results);
+
   } catch (error) {
     console.error('Doctor-wise OPD Report Error:', error);
-    res.status(500).json({ message: 'Server error while generating doctor-wise OPD report.' });
+    res.status(500).json({
+      message: 'Server error while generating doctor-wise OPD report.'
+    });
   }
 };
+
 
 
 exports.getCentralIPDRegister = async (req, res) => {
   console.log("📥 Query received:", req.query);
 
   try {
-    const { startDate, endDate, departmentId, doctorId } = req.query;
+    const { startDate, endDate, specialtyId, doctorId } = req.query;
     const match = {};
 
+    // Date filter
     if (startDate || endDate) {
       match.admissionDate = {};
       if (startDate) match.admissionDate.$gte = new Date(startDate);
       if (endDate) match.admissionDate.$lte = new Date(endDate);
     }
 
-if (doctorId) {
-  const doctor = await Doctor.findOne({ userId: doctorId });
-  if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
-  match.admittingDoctorId = doctor._id;
-}
+    // Doctor filter (from userId → Doctor._id)
+    if (doctorId) {
+      const doctor = await Doctor.findOne({ userId: doctorId });
+      if (!doctor) {
+        return res.status(404).json({ message: 'Doctor not found' });
+      }
+      match.admittingDoctorId = doctor._id;
+    }
 
+    // Specialty filter
+    if (specialtyId) {
+      const doctorsInSpecialty = await Doctor.find({
+        specialty: specialtyId
+      }).select('_id');
 
-    if (departmentId) {
-      // First get all doctors in the department
-      const doctorsInDept = await Doctor.find({ department: departmentId }).select('_id');
-      match.admittingDoctorId = { $in: doctorsInDept.map(doc => doc._id) };
+      match.admittingDoctorId = {
+        $in: doctorsInSpecialty.map(doc => doc._id)
+      };
     }
 
     const admissions = await IPDAdmission.find(match)
@@ -268,19 +364,21 @@ if (doctorId) {
         path: 'admittingDoctorId',
         populate: [
           { path: 'userId', select: 'name' },
-          { path: 'department', select: 'name' }
+          { path: 'specialty', select: 'name' }
         ]
       })
       .populate('wardId', 'name')
       .populate('roomCategoryId', 'name')
       .sort({ admissionDate: -1 });
-console.log('🧠 Raw Doctor Data:', admissions.map(a => ({
-  admissionId: a._id,
-  doctorId: a.admittingDoctorId?._id,
-  populatedUserId: a.admittingDoctorId?.userId,
-  doctorName: a.admittingDoctorId?.userId?.name,
-  departmentName: a.admittingDoctorId?.department?.name,
-})));
+
+    console.log('🧠 Raw Doctor Data:', admissions.map(a => ({
+      admissionId: a._id,
+      doctorId: a.admittingDoctorId?._id,
+      populatedUserId: a.admittingDoctorId?.userId,
+      doctorName: a.admittingDoctorId?.userId?.name,
+      specialtyName: a.admittingDoctorId?.specialty?.name,
+    })));
+
     const result = admissions.map(ad => ({
       _id: ad._id,
       admissionDate: ad.admissionDate,
@@ -293,7 +391,7 @@ console.log('🧠 Raw Doctor Data:', admissions.map(a => ({
         ? {
             _id: ad.admittingDoctorId._id,
             name: ad.admittingDoctorId.userId?.name,
-            department: ad.admittingDoctorId.department?.name
+            specialty: ad.admittingDoctorId.specialty?.name
           }
         : null,
       ward: ad.wardId,
@@ -301,16 +399,80 @@ console.log('🧠 Raw Doctor Data:', admissions.map(a => ({
     }));
 
     res.status(200).json(result);
+
   } catch (error) {
     console.error('Central IPD Register Error:', error);
-    res.status(500).json({ message: 'Server error while generating Central IPD Register.' });
+    res.status(500).json({
+      message: 'Server error while generating Central IPD Register.'
+    });
   }
 };
 
 
+
+// exports.getDepartmentWiseIPDRegister = async (req, res) => {
+//   try {
+//   const { startDate, endDate, departmentId } = req.query;
+
+//     const match = {};
+//     if (startDate || endDate) {
+//       match.admissionDate = {};
+//       if (startDate) match.admissionDate.$gte = new Date(startDate);
+//       if (endDate) match.admissionDate.$lte = new Date(endDate);
+//     }
+
+//     const admissions = await IPDAdmission.find(match)
+//       .populate('patientId', 'fullName patientId')
+//       .populate({
+//         path: 'admittingDoctorId',
+//         populate: [
+//           { path: 'userId', select: 'name' },
+//           { path: 'department', select: 'name' }
+//         ]
+//       });
+
+//     const deptMap = {};
+
+//     for (const ad of admissions) {
+//       const dept = ad.admittingDoctorId?.department;
+//       const deptId = dept?._id?.toString();
+//       const deptName = dept?.name || 'Unknown';
+
+//       if (!deptMap[deptId]) {
+//         deptMap[deptId] = {
+//           department: deptName,
+//           departmentId: deptId,
+//           totalAdmissions: 0,
+//           admissions: []
+//         };
+//       }
+
+//       deptMap[deptId].totalAdmissions += 1;
+
+//       deptMap[deptId].admissions.push({
+//         _id: ad._id,
+//         admissionDate: ad.admissionDate,
+//         status: ad.status,
+//         bedNumber: ad.bedNumber,
+//         patient: ad.patientId,
+//         doctor: ad.admittingDoctorId
+//           ? {
+//               _id: ad.admittingDoctorId._id,
+//               name: ad.admittingDoctorId.userId?.name
+//             }
+//           : null
+//       });
+//     }
+
+//     res.status(200).json(Object.values(deptMap));
+//   } catch (error) {
+//     console.error('Department-wise IPD Register Error:', error);
+//     res.status(500).json({ message: 'Server error generating department-wise IPD register.' });
+//   }
+// };
 exports.getDepartmentWiseIPDRegister = async (req, res) => {
   try {
-  const { startDate, endDate, departmentId } = req.query;
+    const { startDate, endDate, specialtyId } = req.query;
 
     const match = {};
     if (startDate || endDate) {
@@ -319,35 +481,36 @@ exports.getDepartmentWiseIPDRegister = async (req, res) => {
       if (endDate) match.admissionDate.$lte = new Date(endDate);
     }
 
+    // Fetch IPD admissions
     const admissions = await IPDAdmission.find(match)
       .populate('patientId', 'fullName patientId')
       .populate({
         path: 'admittingDoctorId',
         populate: [
           { path: 'userId', select: 'name' },
-          { path: 'department', select: 'name' }
+          { path: 'specialty', select: 'name' }
         ]
       });
 
-    const deptMap = {};
+    const specialtyMap = {};
 
     for (const ad of admissions) {
-      const dept = ad.admittingDoctorId?.department;
-      const deptId = dept?._id?.toString();
-      const deptName = dept?.name || 'Unknown';
+      const specialty = ad.admittingDoctorId?.specialty;
+      const specialtyIdKey = specialty?._id?.toString();
+      const specialtyName = specialty?.name || 'Unknown Specialty';
 
-      if (!deptMap[deptId]) {
-        deptMap[deptId] = {
-          department: deptName,
-          departmentId: deptId,
+      if (!specialtyMap[specialtyIdKey]) {
+        specialtyMap[specialtyIdKey] = {
+          specialty: specialtyName,
+          specialtyId: specialtyIdKey,
           totalAdmissions: 0,
           admissions: []
         };
       }
 
-      deptMap[deptId].totalAdmissions += 1;
+      specialtyMap[specialtyIdKey].totalAdmissions += 1;
 
-      deptMap[deptId].admissions.push({
+      specialtyMap[specialtyIdKey].admissions.push({
         _id: ad._id,
         admissionDate: ad.admissionDate,
         status: ad.status,
@@ -362,10 +525,13 @@ exports.getDepartmentWiseIPDRegister = async (req, res) => {
       });
     }
 
-    res.status(200).json(Object.values(deptMap));
+    res.status(200).json(Object.values(specialtyMap));
+
   } catch (error) {
-    console.error('Department-wise IPD Register Error:', error);
-    res.status(500).json({ message: 'Server error generating department-wise IPD register.' });
+    console.error('Specialty-wise IPD Register Error:', error);
+    res.status(500).json({
+      message: 'Server error generating specialty-wise IPD register.'
+    });
   }
 };
 
@@ -373,7 +539,7 @@ exports.getDepartmentWiseIPDRegister = async (req, res) => {
 
 exports.getOTProcedureRegister = async (req, res) => {
   try {
-    const { startDate, endDate, status, surgeonId, departmentId } = req.query;
+    const { startDate, endDate, status, surgeonId, specialtyId } = req.query;
 
     const match = { procedureType: 'OT' };
 
@@ -393,15 +559,16 @@ exports.getOTProcedureRegister = async (req, res) => {
         path: 'surgeonId',
         populate: [
           { path: 'userId', select: 'name' },
-          { path: 'department', select: 'name' }
+          { path: 'specialty', select: 'name' }
         ]
       });
 
     let result = schedules;
 
-    if (departmentId) {
+    // Specialty filter
+    if (specialtyId) {
       result = schedules.filter(s =>
-        s.surgeonId?.department?._id?.toString() === departmentId
+        s.surgeonId?.specialty?._id?.toString() === specialtyId
       );
     }
 
@@ -417,18 +584,21 @@ exports.getOTProcedureRegister = async (req, res) => {
             name: s.surgeonId.userId?.name
           }
         : null,
-      department: s.surgeonId?.department
+      specialty: s.surgeonId?.specialty
         ? {
-            _id: s.surgeonId.department._id,
-            name: s.surgeonId.department.name
+            _id: s.surgeonId.specialty._id,
+            name: s.surgeonId.specialty.name
           }
         : null
     }));
 
     res.status(200).json(formatted);
+
   } catch (error) {
     console.error('OT Procedure Register Error:', error);
-    res.status(500).json({ message: 'Error generating OT procedure register.' });
+    res.status(500).json({
+      message: 'Error generating OT procedure register.'
+    });
   }
 };
 
@@ -443,34 +613,46 @@ exports.getAnesthesiaRegister = async (req, res) => {
       if (startDate) match.induceTime.$gte = new Date(startDate);
       if (endDate) match.induceTime.$lte = new Date(endDate);
     }
+
     if (anestheticId) match.anestheticId = anestheticId;
 
     const records = await AnesthesiaRecord.find(match)
       .populate({ path: "patientId", select: "fullName" })
       .populate({
         path: "anestheticId",
-        populate: { path: "userId", select: "name" }
+        populate: [
+          { path: "userId", select: "name" },
+          { path: "specialty", select: "name" }
+        ]
       });
 
     const result = records.map(rec => ({
       _id: rec._id,
-      patient: rec.patientId || (rec.ipdAdmissionId && rec.ipdAdmissionId.patientId) || null,
+      patient: rec.patientId || null,
       anesthetist: rec.anestheticId
-        ? { _id: rec.anestheticId._id, name: rec.anestheticId.userId?.name }
+        ? {
+            _id: rec.anestheticId._id,
+            name: rec.anestheticId.userId?.name,
+            specialty: rec.anestheticId.specialty?.name
+          }
         : null,
       anesthesiaType: rec.anesthesiaType,
       anesthesiaName: rec.anesthesiaName,
-      procedureType: rec.procedureType,     // ✅ INCLUDE THIS
+      procedureType: rec.procedureType,
       induceTime: rec.induceTime,
       endTime: rec.endTime
     }));
 
     res.status(200).json(result);
+
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: "Error generating anesthesia register." });
+    console.error('Anesthesia Register Error:', error);
+    res.status(500).json({
+      message: "Error generating anesthesia register."
+    });
   }
 };
+
 
 
 
