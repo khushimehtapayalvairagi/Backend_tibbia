@@ -300,15 +300,12 @@ exports.getDoctorWiseOPDRegister = async (req, res) => {
         .select('consultationDateTime chiefComplaint diagnosis patientId');
 
       if (consultations.length > 0) {
-        results.push({
-          doctor: {
-            _id: doctor._id,
-            name: doctor.userId?.name || 'N/A',
-            specialty: doctor.specialty?.name || 'N/A'
-          },
-          totalConsultations: consultations.length,
-          consultations
-        });
+       results.push({
+  doctor: { _id: doctor._id, name: doctor.userId?.name || "N/A", specialty: doctor.specialty?.name || "N/A" },
+  totalConsultations: consultations.length,
+  consultations // can be empty
+});
+
       }
     }
 
