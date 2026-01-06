@@ -546,16 +546,25 @@ exports.getOTProcedureRegister = async (req, res) => {
   try {
     const { startDate, endDate, status, surgeonId, specialtyId } = req.query;
 
-    const match = { procedureType: 'OT' };
+  const match = {
+  procedureType: { $in: ['OT', 'Ot', 'ot'] }
+};
+
 
     if (status) match.status = status;
     if (surgeonId) match.surgeonId = surgeonId;
 
-    if (startDate || endDate) {
-      match.scheduledDateTime = {};
-      if (startDate) match.scheduledDateTime.$gte = new Date(startDate);
-      if (endDate) match.scheduledDateTime.$lte = new Date(endDate);
-    }
+  if (startDate || endDate) {
+  match.scheduledDateTime = {};
+
+  if (startDate) {
+    match.scheduledDateTime.$gte = new Date(`${startDate}T00:00:00.000Z`);
+  }
+
+  if (endDate) {
+    match.scheduledDateTime.$lte = new Date(`${endDate}T23:59:59.999Z`);
+  }
+}
 
     const schedules = await ProcedureSchedule.find(match)
       .populate('procedureId', 'name cost')
@@ -578,29 +587,38 @@ exports.getOTProcedureRegister = async (req, res) => {
       );
     }
 
-    const formatted = result.map(s => ({
-      _id: s._id,
-      scheduledDateTime: s.scheduledDateTime,
-      status: s.status,
-      procedure: s.procedureId,
-      patient: s.patientId,
-     surgeon: s.surgeonId
-  ? {
-      _id: s.surgeonId._id,
-      name:
-        s.surgeonId.userId?.name ||   // Doctor → User
-        s.surgeonId.name ||           // If surgeonId is User
-        "N/A"
-    }
-  : null,
+const formatted = result.map(s => ({
+  _id: s._id,
+  scheduledDateTime: s.scheduledDateTime,
+  status: s.status,
 
-      // specialty: s.surgeonId?.specialty
-      //   ? {
-      //       _id: s.surgeonId.specialty._id,
-      //       name: s.surgeonId.specialty.name
-      //     }
-      //   : null
-    }));
+  procedure: s.procedureId
+    ? {
+        _id: s.procedureId._id,
+        name: s.procedureId.name,
+        cost: s.procedureId.cost
+      }
+    : null,
+
+  patient: s.patientId
+    ? {
+        _id: s.patientId._id,
+        name: s.patientId.fullName,
+        patientId: s.patientId.patientId
+      }
+    : null,
+
+  surgeon: s.surgeonId
+    ? {
+        _id: s.surgeonId._id,
+        name:
+          s.surgeonId.userId?.name ||
+          s.surgeonId.name ||
+          'N/A'
+      }
+    : null
+}));
+
 
     res.status(200).json(formatted);
 
