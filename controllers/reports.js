@@ -656,7 +656,13 @@ exports.getAnesthesiaRegister = async (req, res) => {
 
     const result = records.map(rec => ({
       _id: rec._id,
-      patient: rec.patientId || null,
+      patient: rec.patientId
+  ? {
+      _id: rec.patientId._id,
+      name: rec.patientId.fullName
+    }
+  : null,
+
      anesthetist: rec.anestheticId
   ? {
       _id: rec.anestheticId._id,
