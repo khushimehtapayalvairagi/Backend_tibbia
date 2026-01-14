@@ -7,7 +7,7 @@ const setupSocket = (server) => {
     cors: {
       origin: [
         "http://localhost:3000",
-        "https://tibbia.kloudcrm.site",
+        "https://kashichem.com",
         //  "https://kloudcrm.site",
       ],
       methods: ["GET", "POST"],
