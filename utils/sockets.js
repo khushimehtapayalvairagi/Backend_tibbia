@@ -8,6 +8,8 @@ const setupSocket = (server) => {
       origin: [
         "http://localhost:3000",
         "https://kashichem.com",
+        "http://kashichem.com",
+
         //  "https://kloudcrm.site",
       ],
       methods: ["GET", "POST"],
