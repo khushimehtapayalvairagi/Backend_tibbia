@@ -9,9 +9,12 @@ const { setupSocket } = require('./utils/sockets');
 const { restrictToLoggedInUserOnly, restrictTo, restrictToDesignation } = require('./middlewares/auth');
 dotenv.config();
 
+const PORT = process.env.PORT || 8001;
+const app = express();
+const server = http.createServer(app); 
 
- const app = express();
-const server = http.createServer(app);
+ setupSocket(server); 
+
 app.use(express.json());
 app.use(cookieParser());
 
@@ -26,29 +29,7 @@ app.use(
         credentials: true,
   })
 );
-// require("dotenv").config();
-// const express = require("express");
-// const http = require("http");
-// const cookieParser = require("cookie-parser");
-// const cors = require("cors");
-// const { connectDB } = require("./utils/config");
-// const { setupSocket } = require("./utils/sockets");
 
-// const app = express();
-// const server = http.createServer(app);
-
-// // Middlewares
-// app.use(express.json());
-// app.use(cookieParser());
-
-// app.use(cors({
-//   origin: [
-//     "https://kashichem.com",
-//     "http://kashichem.com",
-//     "http://localhost:3000"
-//   ],
-//   credentials: true,
-// }));
 
 
 const AuthHandler = require('./routes/auth');
@@ -69,15 +50,12 @@ const billingHandler = require('./routes/billing');
 const reports = require('./routes/reports');
 
 
-(async () => {
-  await connectDB(process.env.DATABASE_URL);
+connectDB(process.env.DATABASE_URL);
 
-  setupSocket(server);
 
-  server.listen(process.env.PORT || 8001, () => {
-    console.log(`Server is listening at PORT: ${process.env.PORT || 8001}`);
-  });
-})();
+server.listen(PORT, () => {
+    console.log(`Server is listening at PORT: ${PORT}`);
+});
 
 
 app.use('/api/auth', AuthHandler);
