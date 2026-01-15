@@ -1,34 +1,29 @@
-const express = require('express');
-const http = require('http');
-const cookieParser = require('cookie-parser');
-const { connectDB } = require('./utils/config');
-const cors = require('cors');
-const dotenv = require('dotenv');
-const { setupSocket } = require('./utils/sockets');
+require("dotenv").config();
+const express = require("express");
+const http = require("http");
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
 
-const { restrictToLoggedInUserOnly, restrictTo, restrictToDesignation } = require('./middlewares/auth');
-dotenv.config();
+const { connectDB } = require("./utils/config");
+const { setupSocket } = require("./utils/sockets");
 
-const PORT = process.env.PORT || 8001;
 const app = express();
-const server = http.createServer(app); 
+const server = http.createServer(app);
 
- setupSocket(server); 
-
+// Middlewares
 app.use(express.json());
 app.use(cookieParser());
-
 app.use(
   cors({
-    // origin: ["https://uudra.in", "http://localhost:3000"],
-        // origin: ["http://localhost:3000"],
-          // origin: ["https://kloudcrm.site", "http://kloudcrm.site", "https://www.kloudcrm.site"],
-           origin: [ "https://kashichem.com",  // ✅ Add this line
-      "http://kashichem.com" ],
-
-        credentials: true,
+    origin: [
+      "https://kashichem.com",
+      "http://kashichem.com",
+      "http://localhost:3000",
+    ],
+    credentials: true,
   })
 );
+
 
 
 
@@ -49,13 +44,16 @@ const billingHandler = require('./routes/billing');
 
 const reports = require('./routes/reports');
 
+(async () => {
+  await connectDB(process.env.DATABASE_URL);
 
-connectDB(process.env.DATABASE_URL);
+  // After DB is connected -> setup socket and start server
+  setupSocket(server);
 
-
-server.listen(PORT, () => {
-    console.log(`Server is listening at PORT: ${PORT}`);
-});
+  server.listen(process.env.PORT || 8001, () => {
+    console.log(`Server is listening at PORT: ${process.env.PORT || 8001}`);
+  });
+})();
 
 
 app.use('/api/auth', AuthHandler);
