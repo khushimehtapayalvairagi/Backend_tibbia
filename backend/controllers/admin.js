@@ -1,150 +1,151 @@
-const mongoose = require('mongoose');
-const User = require('../models/User'); 
-const Department = require('../models/Department');
-const Specialty = require('../models/Specialty')
-const RoomCategory = require('../models/Room');
-const Ward = require('../models/Ward');
-const LabourRoom = require('../models/LabourRoom');
-const Procedure = require('../models/Procedure');
-const ManualChargeItem = require('../models/ManualChargeItem');
-const Doctor = require('../models/Doctor');
-const Staff = require('../models/Staff');
-const ReferralPartner = require('../models/ReferralPartner');
-const OperationTheater = require('../models/OperationTheater');
-const IPDAdmission = require('../models/IPDAdmission');
-const bcrypt = require('bcrypt');
+// const mongoose = require('mongoose');
+// const User = require('../models/User'); 
+// const Department = require('../models/Department');
+// const Specialty = require('../models/Specialty')
+// const RoomCategory = require('../models/Room');
+// const Ward = require('../models/Ward');
+// const LabourRoom = require('../models/LabourRoom');
+// const Procedure = require('../models/Procedure');
+// const ManualChargeItem = require('../models/ManualChargeItem');
+// const Doctor = require('../models/Doctor');
+// const Staff = require('../models/Staff');
+// const ReferralPartner = require('../models/ReferralPartner');
+// const OperationTheater = require('../models/OperationTheater');
+// const IPDAdmission = require('../models/IPDAdmission');
+// const bcrypt = require('bcrypt');
 
-const registerHandler = async (req, res) => {
-  try {
-    const {
-      name,
-      email,
-      password,
-      role,
-      doctorType,
-      specialty,
-      medicalLicenseNumber,
-      contactNumber,
-      designation,
-      department,
-      schedule,
-    } = req.body;
+// const registerHandler = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       email,
+//       password,
+//       role,
+//       doctorType,
+//       specialty,
+//       medicalLicenseNumber,
+//       contactNumber,
+//       designation,
+//       department,
+//       schedule,
+//     } = req.body;
 
-    const requesterRole = req.user?.role;
+//     const requesterRole = req.user?.role;
 
-    if (!name || !email || !password || !role) {
-      throw new Error('Name, email, password, and role are required.');
-    }
+//     if (!name || !email || !password || !role) {
+//       throw new Error('Name, email, password, and role are required.');
+//     }
 
-    // Only admin can create users
-    if (requesterRole !== 'ADMIN') {
-      throw new Error('Only Admin is allowed to register users.');
-    }
+//     // Only admin can create users
+//     if (requesterRole !== 'ADMIN') {
+//       throw new Error('Only Admin is allowed to register users.');
+//     }
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      throw new Error('User with this email already exists.');
-    }
+//     // Check if user already exists
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       throw new Error('User with this email already exists.');
+//     }
 
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+//     // Hash password
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Create user record
-    const newUser = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      role,
-    });
+//     // Create user record
+//     const newUser = await User.create({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       role,
+//     });
 
-    // Handle ADMIN
-    if (role.toUpperCase() === 'ADMIN') {
-      return res.status(201).json({
-        message: 'Admin registered successfully.',
-        userId: newUser._id,
-      });
-    }
+//     // Handle ADMIN
+//     if (role.toUpperCase() === 'ADMIN') {
+//       return res.status(201).json({
+//         message: 'Admin registered successfully.',
+//         userId: newUser._id,
+//       });
+//     }
 
-    // Handle DOCTOR
-    if (role.toUpperCase() === 'DOCTOR') {
-      if (!doctorType || !specialty || !medicalLicenseNumber) {
-        throw new Error('doctorType, specialty, and medicalLicenseNumber are required for Doctor.');
-      }
+//     // Handle DOCTOR
+//     if (role.toUpperCase() === 'DOCTOR') {
+//       if (!doctorType || !specialty || !medicalLicenseNumber) {
+//         throw new Error('doctorType, specialty, and medicalLicenseNumber are required for Doctor.');
+//       }
 
-      const specialtyData = await Specialty.findOne({
-        name: new RegExp(`^${specialty.trim()}$`, 'i'),
-      });
-      if (!specialtyData) throw new Error(`Specialty '${specialty}' not found.`);
+//       const specialtyData = await Specialty.findOne({
+//         name: new RegExp(`^${specialty.trim()}$`, 'i'),
+//       });
+//       if (!specialtyData) throw new Error(`Specialty '${specialty}' not found.`);
 
-      const departmentData = await Department.findById(department);
-      if (!departmentData) throw new Error('Department not found.');
+//       const departmentData = await Department.findById(department);
+//       if (!departmentData) throw new Error('Department not found.');
 
-      const allDays = [
-        'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
-      ];
+//       const allDays = [
+//         'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'
+//       ];
 
-      const fullWeekSchedule = allDays.map(day => ({
-        dayOfWeek: day,
-        startTime: '00:00',
-        endTime: '23:59',
-        isAvailable: true,
-      }));
+//       const fullWeekSchedule = allDays.map(day => ({
+//         dayOfWeek: day,
+//         startTime: '00:00',
+//         endTime: '23:59',
+//         isAvailable: true,
+//       }));
 
-      const doctor = await Doctor.create({
-        userId: newUser._id,
-        doctorType,
-        specialty: specialtyData._id,
-        department: departmentData._id,
-        medicalLicenseNumber,
-        schedule: schedule && schedule.length ? schedule : fullWeekSchedule,
-         isActive: true,
-      });
+//       const doctor = await Doctor.create({
+//         userId: newUser._id,
+//         doctorType,
+//         specialty: specialtyData._id,
+//         department: departmentData._id,
+//         medicalLicenseNumber,
+//         schedule: schedule && schedule.length ? schedule : fullWeekSchedule,
+//          isActive: true,
+//       });
 
-      return res.status(201).json({
-        message: 'Doctor registered successfully with schedule.',
-        userId: newUser._id,
-        doctorId: doctor._id,
-      });
-    }
+//       return res.status(201).json({
+//         message: 'Doctor registered successfully with schedule.',
+//         userId: newUser._id,
+//         doctorId: doctor._id,
+//       });
+//     }
 
-    // ✅ Handle STAFF (fixed version)
-      if (role.toUpperCase() === 'STAFF') {
-      if (!contactNumber || !designation) {
-        throw new Error('contactNumber and designation are required for Staff.');
-      }
+//     // ✅ Handle STAFF (fixed version)
+//       if (role.toUpperCase() === 'STAFF') {
+//       if (!contactNumber || !designation) {
+//         throw new Error('contactNumber and designation are required for Staff.');
+//       }
 
-      let departmentId = null;
-      if (department) {
-        const departmentData = await Department.findOne({ name: department.trim() });
-        if (!departmentData) throw new Error(`Department not found.`);
-        departmentId = departmentData._id;
-      }
-
-      const staff = await Staff.create({
-        userId: newUser._id,
-        contactNumber,
-        designation,
-        department: departmentId
-      });
-
-      return res.status(201).json({
-        message: 'Staff registered successfully.',
-        userId: newUser._id,
-        staffId: staff._id
-      });
-    }
+//       let departmentId = null;
+//      if (department) {
+//   const departmentData = await Department.findById(department);
+//   if (!departmentData) throw new Error('Department not found.');
+//   departmentId = departmentData._id;
+// }
 
 
-    // Handle unknown roles
-    throw new Error('Invalid role.');
+//       const staff = await Staff.create({
+//         userId: newUser._id,
+//         contactNumber,
+//         designation,
+//         department: departmentId
+//       });
 
-  } catch (error) {
-    console.error('Registration error:', error.message);
-    return res.status(400).json({ message: error.message });
-  }
-};
+//       return res.status(201).json({
+//         message: 'Staff registered successfully.',
+//         userId: newUser._id,
+//         staffId: staff._id
+//       });
+//     }
+
+
+//     // Handle unknown roles
+//     throw new Error('Invalid role.');
+
+//   } catch (error) {
+//     console.error('Registration error:', error.message);
+//     return res.status(400).json({ message: error.message });
+//   }
+// };
 
 // const registerHandler = async (req, res) => {
 //   try {
@@ -291,6 +292,255 @@ const registerHandler = async (req, res) => {
 //     return res.status(400).json({ message: error.message });
 //   }
 // };
+
+
+const mongoose = require('mongoose');
+const User = require('../models/User'); 
+const Department = require('../models/Department');
+const Specialty = require('../models/Specialty')
+const RoomCategory = require('../models/Room');
+const Ward = require('../models/Ward');
+const LabourRoom = require('../models/LabourRoom');
+const Procedure = require('../models/Procedure');
+const ManualChargeItem = require('../models/ManualChargeItem');
+const Doctor = require('../models/Doctor');
+const Staff = require('../models/Staff');
+const ReferralPartner = require('../models/ReferralPartner');
+const OperationTheater = require('../models/OperationTheater');
+const IPDAdmission = require('../models/IPDAdmission');
+const bcrypt = require('bcrypt');
+
+// const registerHandler = async (req, res) => {
+//   try {
+//     const {
+//       name,
+//       email,
+//       password,
+//       role,
+//       doctorType,
+//       specialty,
+//       medicalLicenseNumber,
+//       schedule,
+//       contactNumber,
+//       designation,
+//       department,
+//     } = req.body;
+
+//     const requesterRole = req.user?.role;
+
+//     if (!name || !email || !password || !role) {
+//       throw new Error('Name, email, password, and role are required.');
+//     }
+
+//     // Only admin can create users
+//     if (requesterRole !== 'ADMIN') {
+//       throw new Error('Only Admin is allowed to register users.');
+//     }
+
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       throw new Error('User with this email already exists.');
+//     }
+
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(password, salt);
+
+//     const newUser = await User.create({
+//       name,
+//       email,
+//       password: hashedPassword,
+//       role,
+//     });
+
+//     // If role is ADMIN, we don’t need to check anything else
+//     if (role.toUpperCase() === 'ADMIN') {
+//       return res.status(201).json({
+//         message: 'Admin registered successfully.',
+//         userId: newUser._id,
+//       });
+//     }
+
+//     // Handle DOCTOR
+//    // Handle DOCTOR
+// if (role.toUpperCase() === 'DOCTOR') {
+//   if (!doctorType || !specialty || !medicalLicenseNumber) {
+//     throw new Error('doctorType, specialty, and medicalLicenseNumber are required for Doctor.');
+//   }
+
+//   const specialtyData = await Specialty.findOne({
+//     name: new RegExp(`^${specialty.trim()}$`, 'i'),
+//   });
+//   if (!specialtyData) throw new Error(`Specialty '${specialty}' not found.`);
+
+//   let departmentId = null;
+//   if (department) {
+//     const departmentData = await Department.findOne({ name: department.trim() });
+//     if (!departmentData) {
+//       // instead of throwing, just leave department null
+//       departmentId = null;
+//     } else {
+//       departmentId = departmentData._id;
+//     }
+//   }
+
+//   const allDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+//   const fullWeekSchedule = allDays.map(day => ({
+//     dayOfWeek: day,
+//     startTime: '00:00',
+//     endTime: '23:59',
+//     isAvailable: true
+//   }));
+
+//   const doctor = await Doctor.create({
+//     userId: newUser._id,
+//     doctorType,
+//     specialty: specialtyData._id,
+//     department: departmentId,   // optional now
+//     medicalLicenseNumber,
+//     schedule: schedule && schedule.length ? schedule : fullWeekSchedule
+//   });
+
+//   return res.status(201).json({
+//     message: 'Doctor registered successfully with schedule.',
+//     userId: newUser._id,
+//     doctorId: doctor._id
+//   });
+// }
+
+
+//     // Handle STAFF
+//     if (role.toUpperCase() === 'STAFF') {
+//       if (!designation) {
+//         throw new Error('designation are required for Staff.');
+//       }
+
+//       let departmentId = null;
+//       if (department) {
+//         const departmentData = await Department.findOne({ name: department.trim() });
+//         if (!departmentData) throw new Error(`Department '${department}' not found.`);
+//         departmentId = departmentData._id;
+//       }
+
+//       const staff = await Staff.create({
+//         userId: newUser._id,
+//         contactNumber,
+//         designation,
+//         department: departmentId
+
+//     });
+
+//       return res.status(201).json({
+//         message: 'Staff registered successfully.',
+//         userId: newUser._id,
+//         staffId: staff._id
+//       });
+//     }
+
+//     // If role is unknown
+//     throw new Error('Invalid role.');
+    
+//   } catch (error) {
+//     console.error('Registration error:', error.message);
+//     return res.status(400).json({ message: error.message });
+//   }
+// }
+
+;
+
+const registerHandler = async (req, res) => {
+  try {
+    const {
+      name,
+      email,
+      password,
+      role,
+      doctorType,
+      specialty,
+      medicalLicenseNumber,
+      schedule,
+      contactNumber,
+      designation,
+    } = req.body;
+
+    if (!name || !email || !password || !role) {
+      throw new Error('Name, email, password, and role are required.');
+    }
+
+    if (req.user?.role !== 'ADMIN') {
+      throw new Error('Only Admin is allowed to register users.');
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      throw new Error('User with this email already exists.');
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await User.create({
+      name,
+      email,
+      password: hashedPassword,
+      role,
+    });
+
+    /* ===================== DOCTOR ===================== */
+    if (role.toUpperCase() === 'DOCTOR') {
+      if (!doctorType || !specialty || !medicalLicenseNumber) {
+        throw new Error('doctorType, specialty, and medicalLicenseNumber are required.');
+      }
+
+      const specialtyData = await Specialty.findOne({
+        name: new RegExp(`^${specialty.trim()}$`, 'i'),
+      });
+      if (!specialtyData) throw new Error(`Specialty '${specialty}' not found.`);
+
+      const allDays = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+      const fullWeekSchedule = allDays.map(day => ({
+        dayOfWeek: day,
+        startTime: '00:00',
+        endTime: '23:59',
+        isAvailable: true
+      }));
+
+      const doctor = await Doctor.create({
+        userId: newUser._id,
+        doctorType,
+        specialty: specialtyData._id,
+        medicalLicenseNumber,
+        schedule: schedule?.length ? schedule : fullWeekSchedule
+      });
+
+      return res.status(201).json({
+        message: 'Doctor registered successfully.',
+        doctorId: doctor._id,
+      });
+    }
+
+    /* ===================== STAFF ===================== */
+    if (role.toUpperCase() === 'STAFF') {
+      if (!designation || !contactNumber) {
+        throw new Error('designation and contactNumber are required for Staff.');
+      }
+
+      const staff = await Staff.create({
+        userId: newUser._id,
+        designation,
+        contactNumber,
+      });
+
+      return res.status(201).json({
+        message: 'Staff registered successfully.',
+        staffId: staff._id,
+      });
+    }
+
+    throw new Error('Invalid role.');
+
+  } catch (error) {
+    return res.status(400).json({ message: error.message });
+  }
+};
 
 
 
@@ -555,7 +805,7 @@ const getAllManualChargeItemsHandler = async (req, res) => {
 
 const getAllStaffHandler = async (req, res) => {
     try {
-        const staffList = await Staff.find().populate('userId', 'name email role').populate('department', 'name');
+        const staffList = await Staff.find().populate('userId', 'name email');
         res.status(200).json({ staff: staffList });
     } catch (error) {
         console.error('Fetch Staff Error:', error);
@@ -581,7 +831,7 @@ const getAllDoctorsHandler = async (req, res) => {
     try {
         const doctors = await Doctor.find().populate('userId', 'name email role')
         .populate('specialty', 'name')
-          .populate('department','name')
+        //   .populate('department','name')
         res.status(200).json({ doctors });
     } catch (error) {
         console.error('Fetch Doctors Error:', error);
@@ -589,19 +839,19 @@ const getAllDoctorsHandler = async (req, res) => {
     }
 };
 
-// const getDoctorByIdHandler = async (req, res) => {
-//     try {
-//         const { id } = req.params;
+const getDoctorByIdHandler = async (req, res) => {
+    try {
+        const { id } = req.params;
 
-//         const doctor = await Doctor.findById(id).populate('userId', 'name email role').populate('specialty', 'name');
-//         if (!doctor) return res.status(404).json({ message: 'Doctor not found.' });
+        const doctor = await Doctor.findById(id).populate('userId', 'name email role').populate('specialty', 'name');
+        if (!doctor) return res.status(404).json({ message: 'Doctor not found.' });
 
-//         res.status(200).json({ doctor });
-//     } catch (error) {
-//         console.error('Fetch Doctor By ID Error:', error);
-//         res.status(500).json({ message: 'Server error.' });
-//     }
-// };
+        res.status(200).json({ doctor });
+    } catch (error) {
+        console.error('Fetch Doctor By ID Error:', error);
+        res.status(500).json({ message: 'Server error.' });
+    }
+};
 
 const createReferralPartnerHandler = async (req, res) => {
     try {
@@ -690,44 +940,41 @@ const deleteUserHandler = async (req, res) => {
       const doctor = await Doctor.findById(id);
       if (!doctor) return res.status(404).json({ message: 'Doctor not found.' });
 
-      // ✅ Mark both doctor + user inactive
       doctor.isActive = false;
       await doctor.save();
 
-      if (doctor.userId) {
-        await User.findByIdAndUpdate(doctor.userId, { isActive: false });
-      }
+      await User.findByIdAndUpdate(doctor.userId, { isActive: false });
 
-      return res.status(200).json({ message: 'Doctor set as inactive successfully.' });
+      return res.status(200).json({ message: 'Doctor deactivated successfully.' });
 
     } else if (role === 'STAFF') {
       const staff = await Staff.findById(id);
       if (!staff) return res.status(404).json({ message: 'Staff not found.' });
 
+      
       staff.isActive = false;
       await staff.save();
 
-      if (staff.userId) {
-        await User.findByIdAndUpdate(staff.userId, { isActive: false });
-      }
+      await User.findByIdAndUpdate(staff.userId, { isActive: false });
 
-      return res.status(200).json({ message: 'Staff set as inactive successfully.' });
+      return res.status(200).json({ message: 'Staff deactivated successfully.' });
 
     } else {
       return res.status(400).json({ message: 'Invalid role. Only DOCTOR or STAFF allowed.' });
     }
+
   } catch (error) {
-    console.error('Deactivate User Error:', error);
+    console.error('Delete User Error:', error);
     res.status(500).json({ message: 'Server error.' });
   }
 };
-
 
 
 module.exports = {registerHandler,getAllUsersHandler,createDepartmentHandler,getAllDepartmentsHandler
     ,createSpecialtyHandler,getAllSpecialtiesHandler,createRoomCategoryHandler,getAllRoomCategoriesHandler,createWardHandler
     ,getAllWardsHandler,createLabourRoomHandler,getAllLabourRoomsHandler,createProcedureHandler,getAllProceduresHandler
     ,createManualChargeItemHandler,getAllManualChargeItemsHandler,getAllStaffHandler,getStaffByIdHandler
-    ,getAllDoctorsHandler,createReferralPartnerHandler,getAllReferralPartnersHandler,createOperationTheaterHandler
+    ,getAllDoctorsHandler,getDoctorByIdHandler,createReferralPartnerHandler,getAllReferralPartnersHandler,createOperationTheaterHandler
     ,getAllOperationTheatersHandler,deleteUserHandler
 };
+

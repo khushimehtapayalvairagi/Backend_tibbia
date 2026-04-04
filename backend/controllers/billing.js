@@ -144,3 +144,22 @@ exports.getPaymentsForBill = async (req, res) => {
     res.status(500).json({ message: 'Server error.' });
   }
 };
+// GET /api/billing/pending-patients
+// returns list of patients with bills that are not fully paid
+exports.getPendingBillPatients = async (req, res) => {
+  try {
+    const bills = await Bill.find({
+      payment_status: { $in: ["Pending", "Partial"] }
+    }).populate("patient_id_ref", "fullName");
+
+    // get unique patients from these bills
+    const uniquePatients = [...new Map(
+      bills.map(b => [b.patient_id_ref._id.toString(), b.patient_id_ref])
+    ).values()];
+
+    res.json({ patients: uniquePatients });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server error." });
+  }
+};

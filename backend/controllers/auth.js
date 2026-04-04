@@ -27,7 +27,7 @@ const loginHandler = async (req, res) => {
     let staff=null;
     let doctor=null;
     if (user.role === 'STAFF') {
-      staff = await Staff.findOne({ userId: user._id }).populate('department', 'name');
+      staff = await Staff.findOne({ userId: user._id });
       if (!staff) {
         return res.status(404).json({ message: 'Staff profile not found.' });
       }
@@ -35,7 +35,7 @@ const loginHandler = async (req, res) => {
       extraInfo = {
         designation: staff.designation,
         contactNumber: staff.contactNumber,
-        department: staff.department ? staff.department.name : null
+        // department: staff.department ? staff.department.name : null
       };
 
       tokenPayload._id = staff._id; 

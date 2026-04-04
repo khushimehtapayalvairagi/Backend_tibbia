@@ -12,7 +12,7 @@ const ProcedureScheduleSchema = new mongoose.Schema({
     procedureId: { type: mongoose.Schema.Types.ObjectId, ref: 'Procedure', required: true },
     surgeonId: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', required: true },
     assistantIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], 
-    anestheticId: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' },
+    // anestheticId: { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor' },
     status: { type: String, enum: ['Scheduled', 'In Progress', 'Completed', 'Cancelled'], default: 'Scheduled' },
     isBilled: { type: Boolean, default: false }
 }, { timestamps: true });

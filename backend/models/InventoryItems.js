@@ -8,11 +8,11 @@ const SupplierInfoSchema = new mongoose.Schema({
 const InventoryItemSchema = new mongoose.Schema({
     itemName: { type: String, required: true },
     itemCode: { type: String, required: true, unique: true },
-    category: {
-        type: String,
-        enum: ['Surgical Consumable', 'Equipment', 'Office Supplies'],
-        required: true
-    },
+     category: {
+    type: String,
+    required: true,
+    trim: true
+  },
     unitOfMeasurement: { type: String, required: true }, // e.g., pcs, box, ml
     currentStock: { type: Number, default: 0 },
     minStockLevel: { type: Number, required: true },

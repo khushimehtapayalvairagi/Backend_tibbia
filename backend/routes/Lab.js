@@ -64,7 +64,7 @@ router.post(
   restrictToLoggedInUserOnly,
   restrictTo(['ADMIN', 'STAFF']),
   restrictToDesignation(['Lab Technician']),
-  upload.single('reportFile'),
+    upload.none(), 
   labController.uploadReport
 );
 router.get(

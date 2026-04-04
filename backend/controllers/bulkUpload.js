@@ -26,14 +26,22 @@ const InventoryItem = require("../models/InventoryItems"); // adjust path
 
 // Bulk Upload Inventory Items
 exports.bulkUploadInventory = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
 
   try {
     const data = await parseFile(req.file.path);
     fs.unlinkSync(req.file.path);
 
-    if (!data.length)
+    if (!data.length) {
       return res.status(400).json({ message: "File is empty" });
+    }
+
+    const clean = (val) =>
+      typeof val === "string"
+        ? val.replace(/\r?\n|\r/g, " ").trim()
+        : val;
 
     const errorRows = [];
     const insertedItems = [];
@@ -42,56 +50,67 @@ exports.bulkUploadInventory = async (req, res) => {
       const row = data[i];
       const rowNum = i + 2;
 
-      const {
-        itemName,
-        itemCode,
-        category,
-        unitOfMeasurement,
-        minStockLevel,
-        maxStockLevel,
-        supplierName,
-        supplierContact,
-        currentStock,
-      } = row;
+      const itemName = clean(row.itemName);
+      const category = clean(row.category);
+      const unitOfMeasurement = clean(row.unitOfMeasurement);
+      const supplierName = clean(row.supplierName);
+      const supplierContact = clean(row.supplierContact || row.supplierCo);
 
-      if (
-        !itemName ||
-        !itemCode ||
-        !category ||
-        !unitOfMeasurement ||
-        !minStockLevel ||
-        !maxStockLevel ||
-        !supplierName ||
-        !supplierContact
-      ) {
+      // ✅ Auto-generate itemCode
+      const itemCode =
+        clean(row.itemCode) ||
+        `ITEM-${itemName?.substring(0, 6).toUpperCase()}-${Date.now()}-${i}`;
+
+      const minStockLevel =
+        row.minStockLevel !== undefined && row.minStockLevel !== ""
+          ? Number(row.minStockLevel)
+          : 0;
+
+      const maxStockLevel =
+        row.maxStockLevel !== undefined && row.maxStockLevel !== ""
+          ? Number(row.maxStockLevel)
+          : 0;
+
+      // ✅ Only strict required fields
+      if (!itemName || !category || !unitOfMeasurement || !supplierName || !supplierContact) {
         errorRows.push(rowNum);
         continue;
       }
 
-      // Check for duplicate itemCode
-      const existing = await InventoryItem.findOne({ itemCode: String(itemCode).trim() });
+      // ✅ Check duplicate itemCode
+      const existing = await InventoryItem.findOne({
+        itemCode: itemCode,
+      });
+
       if (existing) {
         errorRows.push(rowNum);
         continue;
       }
 
       insertedItems.push({
-        itemName: String(itemName).trim(),
-        itemCode: String(itemCode).trim(),
-        category: String(category).trim(),
-        unitOfMeasurement: String(unitOfMeasurement).trim(),
-        minStockLevel: Number(minStockLevel),
-        maxStockLevel: Number(maxStockLevel),
+        itemName,
+        itemCode,
+        category,
+        unitOfMeasurement,
+        minStockLevel,
+        maxStockLevel,
         supplierInfo: {
-          name: String(supplierName).trim(),
-          contact: String(supplierContact).trim(),
+          name: supplierName,
+          contact: String(supplierContact),
         },
-        currentStock: currentStock ? Number(currentStock) : 0,
+        currentStock:
+          row.currentStock !== undefined && row.currentStock !== ""
+            ? Number(row.currentStock)
+            : 0,
       });
     }
 
-    if (!insertedItems.length)
-      return res.status(400).json({ message: "No valid rows to upload", errorRows });
+    if (!insertedItems.length) {
+      return res.status(400).json({
+        message: "No valid rows to upload",
+        errorRows,
+      });
+    }
 
     await InventoryItem.insertMany(insertedItems);
 
@@ -101,9 +120,13 @@ exports.bulkUploadInventory = async (req, res) => {
     });
   } catch (error) {
     console.error("Bulk upload error:", error);
-    res.status(500).json({ message: "Upload failed", error: error.message });
+    res.status(500).json({
+      message: "Upload failed",
+      error: error.message,
+    });
   }
 };
+
 
 // ✅ Bulk upload Operation Theaters
 exports.bulkUploadOperationTheatersHandler = async (req, res) => {
@@ -205,8 +228,7 @@ exports.bulkUploadReferralPartnersHandler = async (req, res) => {
 };
 
 
-
-exports. bulkUploadManualChargeItemsHandler = async (req, res) => {
+exports.bulkUploadManualChargeItemsHandler = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "Excel file is required" });
 
@@ -215,34 +237,54 @@ exports. bulkUploadManualChargeItemsHandler = async (req, res) => {
     const data = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName]);
 
     const errorRows = [];
+
     for (let i = 0; i < data.length; i++) {
       const { itemName, category, defaultPrice, description } = data[i];
 
-      if (!itemName || !category || !defaultPrice || !description) {
-        errorRows.push(i + 2); // Excel row number (header is row 1)
+      // Skip rows with missing required fields
+      if (!itemName || !category || defaultPrice === undefined || defaultPrice === null || defaultPrice === '') {
         continue;
       }
 
-      const exists = await ManualChargeItem.findOne({ itemName });
-      if (exists) {
+      // Normalize price: remove commas
+      let price = defaultPrice;
+      if (typeof price === "string") {
+        price = price.replace(/,/g, "").trim();
+      }
+      const numericPrice = Number(price);
+
+      if (isNaN(numericPrice)) {
         errorRows.push(i + 2);
         continue;
       }
 
-      const newItem = new ManualChargeItem({ itemName, category, defaultPrice, description });
-      await newItem.save();
+      // SKIP duplicates without error
+      const exists = await ManualChargeItem.findOne({ itemName });
+      if (exists) {
+        continue;
+      }
+
+      // Save
+      await new ManualChargeItem({
+        itemName,
+        category,
+        defaultPrice: numericPrice,
+        description: description || ""
+      }).save();
     }
 
     if (errorRows.length > 0) {
       return res.status(400).json({ message: "Some rows failed", errorRows });
     }
 
-    res.status(200).json({ message: "Bulk upload successful!" });
+    return res.status(200).json({ message: "Bulk upload successful!" });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: "Server error" });
+    return res.status(500).json({ message: "Server error" });
   }
 };
+
 
 
 exports.bulkUploadProcedures = async (req, res) => {
@@ -269,7 +311,8 @@ exports.bulkUploadProcedures = async (req, res) => {
     const description = row.description?.trim();
     const cost = Number(row.cost);
 
-    if (!name || !description || !cost || isNaN(cost)) {
+   if (!name || !description || typeof row.cost === "undefined" || row.cost === null || row.cost === "" || isNaN(cost)) {
+
       errorRows.push(i + 2); // +2 for header row
       continue;
     }
@@ -290,15 +333,17 @@ exports.bulkUploadProcedures = async (req, res) => {
 };
 
 
+
 exports.bulkUploadWards = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file)
+    return res.status(400).json({ message: "No file uploaded" });
 
   let workbook;
   try {
     workbook = xlsx.readFile(req.file.path);
   } catch (err) {
     fs.unlinkSync(req.file.path);
-    return res.status(400).json({ message: "Invalid Excel file", error: err.message });
+    return res.status(400).json({ message: "Invalid Excel file" });
   }
 
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -309,47 +354,84 @@ exports.bulkUploadWards = async (req, res) => {
   const wardsToInsert = [];
 
   for (let i = 0; i < data.length; i++) {
+    const rowIndex = i + 2;
     const row = data[i];
-    const name = row.name?.trim();
-    const roomCategoryName = row.roomCategory?.trim();
-    const bedsStr = row.beds?.trim(); // comma-separated bed numbers
 
-    if (!name || !roomCategoryName || !bedsStr) {
-      errorRows.push(i + 2); // +2 for header row
+    const name = String(row.name || "").trim();
+    const roomCatName = String(row.roomCategory || "").trim();
+    const bedsStr = String(row.beds || "").trim();
+
+    if (!name || !roomCatName || !bedsStr) {
+      errorRows.push(rowIndex);
       continue;
     }
 
-    const roomCategoryData = await RoomCategory.findOne({ name: roomCategoryName });
-    if (!roomCategoryData) {
-      errorRows.push(i + 2);
+    const roomCat = await RoomCategory.findOne({
+      $or: [{ name: roomCatName }, { description: roomCatName }],
+    });
+
+    if (!roomCat) {
+      errorRows.push(rowIndex);
       continue;
     }
 
-    const bedNumbers = bedsStr.split(',').map(b => b.trim()).filter(Boolean);
-    if (bedNumbers.length === 0) {
-      errorRows.push(i + 2);
-      continue;
+    const parts = bedsStr.split(",").map((x) => x.trim()).filter(Boolean);
+    const beds = [];
+
+    for (const p of parts) {
+      const lower = p.toLowerCase();
+      if (lower.includes("to")) {
+        const [startStr, , endStr] = p.split(" ");
+        const start = parseInt(startStr);
+        const end = parseInt(endStr);
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let num = start; num <= end; num++) {
+            beds.push({ bedNumber: num, status: "available" });
+          }
+        }
+      } else {
+        const num = parseInt(p);
+        if (!isNaN(num)) {
+          beds.push({ bedNumber: num, status: "available" });
+        }
+      }
     }
 
-    const beds = bedNumbers.map(bedNumber => ({ bedNumber, status: 'available' }));
+    if (!beds.length) {
+      errorRows.push(rowIndex);
+      continue;
+    }
 
     wardsToInsert.push({
       name,
-      roomCategory: roomCategoryData._id,
-      beds
+      roomCategory: roomCat._id,
+      beds,
     });
   }
 
-  if (errorRows.length > 0)
-    return res.status(400).json({ message: "Validation failed at rows", errorRows });
+  if (errorRows.length > 0) {
+    return res.status(400).json({
+      message: "Validation failed at rows",
+      errorRows,
+    });
+  }
 
   try {
-    await Ward.insertMany(wardsToInsert);
-    res.json({ message: "Wards uploaded successfully", count: wardsToInsert.length });
+    await Ward.insertMany(wardsToInsert, { ordered: true });
+    res.json({
+      message: "Wards uploaded successfully",
+      count: wardsToInsert.length,
+    });
   } catch (err) {
-    res.status(500).json({ message: "Upload failed", error: err.message });
+    res.status(500).json({
+      message: "Upload failed",
+      error: err.message,
+    });
   }
 };
+
+
+
 
 
 
@@ -478,8 +560,15 @@ exports.bulkUploadSpeciality = async (req, res) => {
 };
 
 // ----------- BULK UPLOAD DEPARTMENT -----------
+
+
+
+
 exports.bulkUploadDepartment = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
+
   try {
     const data = await parseFile(req.file.path);
     fs.unlinkSync(req.file.path);
@@ -487,208 +576,299 @@ exports.bulkUploadDepartment = async (req, res) => {
     const records = [];
     const errorRows = [];
 
+    let lastValidName = null; // ✅ carry forward department name
+
     data.forEach((row, idx) => {
-      if (!row.name || !row.description) errorRows.push(idx + 2);
-      else records.push({ name: row.name.trim(), description: row.description.trim() });
+      const rowNumber = idx + 2; // Excel row number
+
+      const name = row.name?.trim() || lastValidName;
+      const description = row.description?.trim();
+
+      if (!name || !description) {
+        errorRows.push(rowNumber);
+        return;
+      }
+
+      records.push({
+        name,
+        description
+      });
+
+      lastValidName = name;
     });
 
-    if (errorRows.length) return res.status(400).json({ message: "Validation failed", errorRows });
+    if (!records.length) {
+      return res.status(400).json({
+        message: "No valid department records found",
+        errorRows
+      });
+    }
 
-    const inserted = await Department.insertMany(records);
-    res.json({ message: "Departments uploaded successfully", insertedCount: inserted.length });
+    // ✅ ordered:false → continue even if one row fails
+    await Department.insertMany(records, { ordered: false });
+
+    res.status(200).json({
+      message: "Departments uploaded successfully",
+      insertedCount: records.length,
+      invalidRows: errorRows
+    });
+
   } catch (err) {
     fs.existsSync(req.file.path) && fs.unlinkSync(req.file.path);
-    res.status(500).json({ message: "Upload failed", error: err.message });
+
+    res.status(500).json({
+      message: "Upload failed",
+      error: err.message
+    });
   }
 };
+
+
 
 // ----------- BULK UPLOAD DOCTORS -----------
 exports.bulkUploadDoctors = async (req, res) => {
-  if (!req.file) return res.status(400).json({ message: "No file uploaded" });
+  if (!req.file) {
+    return res.status(400).json({ message: "No file uploaded" });
+  }
 
   try {
-    const data = await parseFile(req.file.path);
+    // ✅ Read Excel file
+    const workbook = xlsx.readFile(req.file.path);
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+
+   const rows = xlsx.utils.sheet_to_json(sheet, {
+  defval: "",
+  raw: false,
+  trim: true,
+  range:1, // 👈 SKIP FIRST ROW (TITLE ROW)
+});
+
+    // remove uploaded file
     fs.unlinkSync(req.file.path);
-    if (!data.length) throw new Error("File is empty");
 
-    const errors = [];
+    if (!rows.length) {
+      return res.status(400).json({ message: "Excel file is empty" });
+    }
+
     let successCount = 0;
+    const errorRows = [];
 
-    for (let i = 0; i < data.length; i++) {
-      const row = data[i];
-      const rowNum = i + 2;
+    for (let i = 0; i < rows.length; i++) {
+      const excelRow = rows[i];
+      const rowNumber = i + 2; // header + 1
 
-      let { name, email, password, doctorType, specialty, department, medicalLicenseNumber } = row;
+      try {
+        // ✅ Normalize headers
+        const data = {};
+        Object.keys(excelRow).forEach((key) => {
+          const cleanKey = key.toLowerCase().replace(/\s+/g, "");
+          data[cleanKey] = String(excelRow[key]).trim();
+        });
 
-      name = String(name || "").trim();
-      email = String(email || "").trim();
-      password = String(password || "").trim();
-      doctorType = String(doctorType || "").trim();
-      specialty = String(specialty || "").trim();
-      department = String(department || "").trim();
-      medicalLicenseNumber = String(medicalLicenseNumber || "").trim();
+        // ✅ Correct field mapping
+        const name = data.name;
+        const email = data.email;
+        const password = data.password;
+        const role = data.role;
+        const doctorType = data.doctortype;
+        const specialtyName = data.specialty;
 
-      if (!name || !email || !password || !doctorType || !specialty || !department || !medicalLicenseNumber) {
-        errors.push({ row: rowNum, error: "Missing required fields" });
-        continue;
-      }
+        const medicalLicenseNumber = String(
+          data.medicallicense || ""
+        )
+          .replace(/\s+/g, "")
+          .trim();
 
-      // Check if user already exists
-      const existingUser = await User.findOne({ email });
+        // ✅ Validation
+        const missing = [];
+        if (!name) missing.push("name");
+        if (!email) missing.push("email");
+        if (!password) missing.push("password");
+        if (!doctorType) missing.push("doctorType");
+        if (!specialtyName) missing.push("specialty");
+        if (!medicalLicenseNumber) missing.push("medicalLicenseNumber");
 
-      const specialtyData = await Specialty.findOne({ name: new RegExp(`^${specialty}$`, "i") });
-      const departmentData = await Department.findOne({ name: new RegExp(`^${department}$`, "i") });
+        if (missing.length) {
+          throw new Error(`Missing: ${missing.join(", ")}`);
+        }
 
-      if (!specialtyData || !departmentData) {
-        errors.push({ row: rowNum, error: "Invalid Specialty or Department" });
-        continue;
-      }
+        if (role?.toUpperCase() !== "DOCTOR") {
+          throw new Error("Role must be DOCTOR");
+        }
 
-      if (existingUser) {
-        // ✅ Update existing doctor to active
+        // ✅ Find or create specialty
+        let specialty = await Specialty.findOne({
+          name: new RegExp(`^${specialtyName}$`, "i"),
+        });
+
+        if (!specialty) {
+          specialty = await Specialty.create({ name: specialtyName });
+        }
+
+        // ✅ Find or create user
+        let user = await User.findOne({ email });
+
+        if (!user) {
+          const hashedPassword = await bcrypt.hash(password, 10);
+          user = await User.create({
+            name,
+            email,
+            password: hashedPassword,
+            role: "DOCTOR",
+          });
+        }
+
+        // ✅ Create / Update doctor (NO department)
         await Doctor.findOneAndUpdate(
-          { userId: existingUser._id },
+          { userId: user._id },
           {
+            userId: user._id,
             doctorType,
-            specialty: specialtyData._id,
-            department: departmentData._id,
+            specialty: specialty._id,
             medicalLicenseNumber,
             isActive: true,
           },
-          { new: true }
+          { upsert: true, new: true }
         );
 
         successCount++;
-        continue;
+      } catch (err) {
+        errorRows.push({
+          row: rowNumber,
+          error: err.message,
+        });
       }
-
-      // Create new user
-      const hashedPassword = await bcrypt.hash(password, 10);
-      const newUser = await User.create({
-        name,
-        email,
-        password: hashedPassword,
-        role: "DOCTOR",
-      });
-
-      // Create doctor
-      await Doctor.create({
-        userId: newUser._id,
-        doctorType,
-        specialty: specialtyData._id,
-        department: departmentData._id,
-        medicalLicenseNumber,
-        isActive: true, // ✅ Always active
-      });
-
-      successCount++;
     }
 
-    if (errors.length)
-      return res.status(400).json({
-        message: "Some rows failed",
-        errorRows: errors,
-        successCount,
-      });
-
-    res.json({ message: "Doctors uploaded successfully", successCount });
+    return res.status(200).json({
+      message: errorRows.length
+        ? "Some rows failed"
+        : "Doctors uploaded successfully",
+      successCount,
+      errorRows,
+    });
   } catch (err) {
-    if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-    res.status(500).json({ message: "Upload failed", error: err.message });
+    console.error("Bulk upload doctors error:", err);
+    return res.status(500).json({
+      message: "Upload failed",
+      error: err.message,
+    });
   }
 };
+
+
+
 
 
 
 // ----------- BULK UPLOAD STAFF -----------
 
-
-
+// ----------- BULK UPLOAD STAFF -----------
 exports.bulkUploadStaff = async (req, res) => {
-  if (!req.file)
+  if (!req.file) {
     return res.status(400).json({ message: "No file uploaded" });
+  }
 
   try {
     const data = await parseFile(req.file.path);
     fs.unlinkSync(req.file.path);
 
-    if (!data.length)
-      throw new Error("File is empty");
+    if (!data.length) {
+      return res.status(400).json({ message: "File is empty" });
+    }
 
     const errors = [];
     let successCount = 0;
 
+    const allowedDesignations = [
+      'Head Nurse',
+      'Lab Technician',
+      'Receptionist',
+      'Inventory Manager',
+      'Other',
+      'Pathologist',
+      'Metron',
+      'X-Ray Technicians',
+      'Sonography Assist',
+      'O.T. Attendant',
+      'Pharmacists'
+    ];
+
     for (let i = 0; i < data.length; i++) {
       const row = data[i];
+      const rowNum = i + 2;
 
       try {
-        // ✅ 1. Validate essential fields exist
-        if (
-          !row.name ||
-          !row.email ||
-          !row.designation ||
-          !row.department
-        ) {
-          throw new Error("Missing required staff fields.");
+        const name = String(row.name || "").trim();
+        const email = String(row.email || "").trim().toLowerCase();
+        const password = String(row.password || "123456").trim();
+        const contactNumber = String(row.contactNumber || "").trim();
+        const designation = String(row.designation || "").trim();
+
+        // ✅ required validation
+        if (!name || !email || !designation) {
+          throw new Error("Missing name, email or designation");
         }
 
-        // ✅ 2. Find Department by ID or Name
-        let departmentData;
-        if (/^[0-9a-fA-F]{24}$/.test(row.department)) {
-          departmentData = await Department.findById(row.department);
-        } else {
-          departmentData = await Department.findOne({
-            name: { $regex: new RegExp("^" + row.department + "$", "i") },
-          });
+        // ✅ email validation
+        if (!/^\S+@\S+\.\S+$/.test(email)) {
+          throw new Error("Invalid email format");
         }
 
-        if (!departmentData)
-          throw new Error(`Department '${row.department}' not found.`);
+        // ✅ designation validation
+        if (!allowedDesignations.includes(designation)) {
+          throw new Error("Invalid designation");
+        }
 
-        // ✅ 3. Prevent duplicate email
-        const existingUser = await User.findOne({ email: row.email });
-        if (existingUser)
-          throw new Error(`Email '${row.email}' already exists.`);
+        // 🔥 DUPLICATE CHECK (MOST IMPORTANT)
+        const existingUser = await User.findOne({ email });
 
-        // ✅ 4. Create user
-        const hashedPassword = await bcrypt.hash(row.password || "123456", 10);
-        const newUser = await User.create({
-          name: row.name,
-          email: row.email,
+        if (existingUser) {
+          throw new Error("Email already exists");
+        }
+
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // ✅ create user
+        const user = await User.create({
+          name,
+          email,
           password: hashedPassword,
-          role: "STAFF",
+          role: "STAFF"
         });
 
-        // ✅ 5. Create staff
+        // ✅ create staff
         await Staff.create({
-          userId: newUser._id,
-          department: departmentData._id,
-          designation: row.designation,
-          contactNumber: row.contactNumber || "",
-          isActive: true,
+          userId: user._id,
+          designation,
+          contactNumber: contactNumber || null,
+          isActive: true
         });
 
         successCount++;
+
       } catch (err) {
-        errors.push({ row: i + 2, error: err.message }); // +2 for Excel row number
+        console.log(`Row ${rowNum} error:`, err.message);
+        errors.push({ row: rowNum, error: err.message });
       }
     }
 
-    if (errors.length > 0) {
-      return res.status(400).json({
-        message: "Validation failed. Fix errors and re-upload.",
-        errorRows: errors,
-      });
-    }
-
-    res.status(200).json({
-      message: `Bulk upload completed successfully. ${successCount} staff added.`,
-      errors,
+    return res.status(200).json({
+      message: "Staff bulk upload completed",
+      successCount,
+      errorCount: errors.length,
+      errorRows: errors
     });
+
   } catch (err) {
     console.error("Bulk upload error:", err);
-    res.status(500).json({ message: err.message });
+    return res.status(500).json({ message: err.message });
   }
 };
+
+
+
+
 
 
