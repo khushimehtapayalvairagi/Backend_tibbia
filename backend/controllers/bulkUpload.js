@@ -759,11 +759,6 @@ exports.bulkUploadDoctors = async (req, res) => {
 
 
 
-
-
-
-// ----------- BULK UPLOAD STAFF -----------
-
 // ----------- BULK UPLOAD STAFF -----------
 exports.bulkUploadStaff = async (req, res) => {
   if (!req.file) {
