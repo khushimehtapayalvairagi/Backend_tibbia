@@ -159,22 +159,22 @@ const getPatientByIdHandler = async (req, res) => {
 // };
 
 
-const getAvailableDoctorsHandler = async (req, res) => {
- try {
-    const doctors = await Doctor.find({ isActive: true })
-      .populate('userId', 'name email') // get doctor's name
-      .populate('specialty', 'name');   // get specialty name
+// const getAvailableDoctorsHandler = async (req, res) => {
+//  try {
+//     const doctors = await Doctor.find({ isActive: true })
+//       .populate('userId', 'name email') // get doctor's name
+//       .populate('specialty', 'name');   // get specialty name
 
-    if (!doctors.length) {
-      return res.status(200).json({ doctors: [], message: "No doctors found." });
-    }
+//     if (!doctors.length) {
+//       return res.status(200).json({ doctors: [], message: "No doctors found." });
+//     }
 
-    res.status(200).json({ doctors });
-  } catch (error) {
-    console.error("Error fetching doctors:", error);
-    res.status(500).json({ message: "Server error while fetching doctors." });
-  }
-};
+//     res.status(200).json({ doctors });
+//   } catch (error) {
+//     console.error("Error fetching doctors:", error);
+//     res.status(500).json({ message: "Server error while fetching doctors." });
+//   }
+// };
 // const getAvailableDoctorsHandler = async (req, res) => {
 //   try {
 //     const { specialtyName } = req.body;
@@ -259,9 +259,9 @@ const getAvailableDoctorsHandler = async (req, res) => {
 //     res.status(500).json({ message: "Error creating visit" });
 //   }
 // };
-const generateReceiptNumber = () => {
-  return `OPD-${Date.now()}`;
-};
+// const generateReceiptNumber = () => {
+//   return `OPD-${Date.now()}`;
+// };
 
 const createVisitHandler = async (req, res) => {
   try {
@@ -495,7 +495,7 @@ const getUnbilledProceduresForPatientHandler = async (req, res) => {
 };
 
 module.exports = {registerPatientHandler,getAllPatientsHandler,getPatientByIdHandler,createVisitHandler,updateVisitStatusHandler,getVisitsByPatientHandler
-                ,getAvailableDoctorsHandler,getActivePatientsHandler,getUnbilledProceduresForPatientHandler}
+                ,getActivePatientsHandler,getUnbilledProceduresForPatientHandler}
 
 
 // module.exports = {registerPatientHandler,getAllPatientsHandler,getPatientByIdHandler,createVisitHandler,getVisitsByPatientHandler, getPrescriptionsByPatientHandler
