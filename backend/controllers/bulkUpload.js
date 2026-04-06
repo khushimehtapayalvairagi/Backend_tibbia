@@ -334,7 +334,7 @@ exports.bulkUploadProcedures = async (req, res) => {
 
 
 
-exports.bulkUploadWards = async (req, res) => {
+export const bulkUploadWards = async (req, res) => {
   if (!req.file)
     return res.status(400).json({ message: "No file uploaded" });
 
@@ -351,43 +351,35 @@ exports.bulkUploadWards = async (req, res) => {
   fs.unlinkSync(req.file.path);
 
   const errorRows = [];
+  const successRows = [];
   const wardsToInsert = [];
 
-  for (let i = 0; i < data.length; i++) {
-    const rowIndex = i + 2;
-    const row = data[i];
+  // 🔥 normalize category
+  const normalizeCategory = (val) => {
+    val = val.toLowerCase().trim();
 
-    const name = String(row.name || "").trim();
-    const roomCatName = String(row.roomCategory || "").trim();
-    const bedsStr = String(row.beds || "").trim();
+    if (val.includes("general ward")) return "General Ward";
+    if (val.includes("icu")) return "ICU";
+    if (val.includes("hdu")) return "HDU";
+    if (val.includes("delux")) return "DELUX ROOM";
 
-    if (!name || !roomCatName || !bedsStr) {
-      errorRows.push(rowIndex);
-      continue;
-    }
+    return val;
+  };
 
-    const roomCat = await RoomCategory.findOne({
-      $or: [{ name: roomCatName }, { description: roomCatName }],
-    });
-
-    if (!roomCat) {
-      errorRows.push(rowIndex);
-      continue;
-    }
-
+  // 🔥 parse beds (robust)
+  const parseBeds = (bedsStr) => {
     const parts = bedsStr.split(",").map((x) => x.trim()).filter(Boolean);
     const beds = [];
 
     for (const p of parts) {
-      const lower = p.toLowerCase();
-      if (lower.includes("to")) {
-        const [startStr, , endStr] = p.split(" ");
-        const start = parseInt(startStr);
-        const end = parseInt(endStr);
-        if (!isNaN(start) && !isNaN(end)) {
-          for (let num = start; num <= end; num++) {
-            beds.push({ bedNumber: num, status: "available" });
-          }
+      const match = p.match(/(\d+)\s*to\s*(\d+)/i);
+
+      if (match) {
+        const start = parseInt(match[1]);
+        const end = parseInt(match[2]);
+
+        for (let num = start; num <= end; num++) {
+          beds.push({ bedNumber: num, status: "available" });
         }
       } else {
         const num = parseInt(p);
@@ -397,8 +389,53 @@ exports.bulkUploadWards = async (req, res) => {
       }
     }
 
+    return beds;
+  };
+
+  for (let i = 0; i < data.length; i++) {
+    const rowIndex = i + 2;
+    const row = data[i];
+
+    const name = String(row.name || "").trim();
+    const roomCatRaw = String(row.roomCategory || "").trim();
+    const bedsStr = String(row.beds || "").trim();
+
+    if (!name || !roomCatRaw || !bedsStr) {
+      errorRows.push({ row: rowIndex, error: "Missing required fields" });
+      continue;
+    }
+
+    // ✅ normalize category
+    const normalizedCat = normalizeCategory(roomCatRaw);
+
+    let roomCat = await RoomCategory.findOne({
+      name: { $regex: `^${normalizedCat}$`, $options: "i" },
+    });
+
+    // 🔥 AUTO CREATE category if not found
+    if (!roomCat) {
+      try {
+        roomCat = await RoomCategory.create({
+          name: normalizedCat,
+          description: roomCatRaw, // original store
+        });
+      } catch (err) {
+        errorRows.push({
+          row: rowIndex,
+          error: "Room category creation failed",
+        });
+        continue;
+      }
+    }
+
+    // ✅ parse beds
+    const beds = parseBeds(bedsStr);
+
     if (!beds.length) {
-      errorRows.push(rowIndex);
+      errorRows.push({
+        row: rowIndex,
+        error: "Invalid bed format",
+      });
       continue;
     }
 
@@ -407,25 +444,27 @@ exports.bulkUploadWards = async (req, res) => {
       roomCategory: roomCat._id,
       beds,
     });
-  }
 
-  if (errorRows.length > 0) {
-    return res.status(400).json({
-      message: "Validation failed at rows",
-      errorRows,
-    });
+    successRows.push(rowIndex);
   }
 
   try {
-    await Ward.insertMany(wardsToInsert, { ordered: true });
-    res.json({
-      message: "Wards uploaded successfully",
-      count: wardsToInsert.length,
+    const inserted = await Ward.insertMany(wardsToInsert, {
+      ordered: false, // 🔥 skip duplicates but continue
+    });
+
+    return res.json({
+      message: "Bulk upload completed",
+      successCount: inserted.length,
+      failedCount: errorRows.length,
+      errors: errorRows,
+      successRows,
     });
   } catch (err) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Upload failed",
       error: err.message,
+      partialErrors: errorRows,
     });
   }
 };
