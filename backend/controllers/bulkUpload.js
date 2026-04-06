@@ -354,32 +354,45 @@ export const bulkUploadWards = async (req, res) => {
   const successRows = [];
   const wardsToInsert = [];
 
-  // 🔥 normalize category
+  // ================= NORMALIZE CATEGORY =================
   const normalizeCategory = (val) => {
     val = val.toLowerCase().trim();
 
-    if (val.includes("general ward")) return "General Ward";
     if (val.includes("icu")) return "ICU";
     if (val.includes("hdu")) return "HDU";
+
     if (val.includes("delux")) return "DELUX ROOM";
+
+    // 🔥 KEEP male/female
+    if (val.includes("general ward") && val.includes("female"))
+      return "General Ward Female";
+
+    if (val.includes("general ward") && val.includes("male"))
+      return "General Ward Male";
+
+    if (val.includes("general ward"))
+      return "General Ward";
 
     return val;
   };
 
-  // 🔥 parse beds (robust)
+  // ================= PARSE BEDS =================
   const parseBeds = (bedsStr) => {
     const parts = bedsStr.split(",").map((x) => x.trim()).filter(Boolean);
     const beds = [];
 
     for (const p of parts) {
+      // match "1 To 10" OR "1 to 10"
       const match = p.match(/(\d+)\s*to\s*(\d+)/i);
 
       if (match) {
         const start = parseInt(match[1]);
         const end = parseInt(match[2]);
 
-        for (let num = start; num <= end; num++) {
-          beds.push({ bedNumber: num, status: "available" });
+        if (!isNaN(start) && !isNaN(end)) {
+          for (let num = start; num <= end; num++) {
+            beds.push({ bedNumber: num, status: "available" });
+          }
         }
       } else {
         const num = parseInt(p);
@@ -392,6 +405,7 @@ export const bulkUploadWards = async (req, res) => {
     return beds;
   };
 
+  // ================= MAIN LOOP =================
   for (let i = 0; i < data.length; i++) {
     const rowIndex = i + 2;
     const row = data[i];
@@ -400,6 +414,7 @@ export const bulkUploadWards = async (req, res) => {
     const roomCatRaw = String(row.roomCategory || "").trim();
     const bedsStr = String(row.beds || "").trim();
 
+    // ❌ validation
     if (!name || !roomCatRaw || !bedsStr) {
       errorRows.push({ row: rowIndex, error: "Missing required fields" });
       continue;
@@ -408,24 +423,30 @@ export const bulkUploadWards = async (req, res) => {
     // ✅ normalize category
     const normalizedCat = normalizeCategory(roomCatRaw);
 
-    let roomCat = await RoomCategory.findOne({
-      name: { $regex: `^${normalizedCat}$`, $options: "i" },
-    });
+    let roomCat;
 
-    // 🔥 AUTO CREATE category if not found
-    if (!roomCat) {
-      try {
+    try {
+      // 🔥 FLEXIBLE SEARCH
+      roomCat = await RoomCategory.findOne({
+        $or: [
+          { name: { $regex: normalizedCat, $options: "i" } },
+          { description: { $regex: roomCatRaw, $options: "i" } }
+        ]
+      });
+
+      // 🔥 AUTO CREATE CATEGORY
+      if (!roomCat) {
         roomCat = await RoomCategory.create({
           name: normalizedCat,
-          description: roomCatRaw, // original store
+          description: roomCatRaw,
         });
-      } catch (err) {
-        errorRows.push({
-          row: rowIndex,
-          error: "Room category creation failed",
-        });
-        continue;
       }
+    } catch (err) {
+      errorRows.push({
+        row: rowIndex,
+        error: "Room category error",
+      });
+      continue;
     }
 
     // ✅ parse beds
@@ -439,6 +460,7 @@ export const bulkUploadWards = async (req, res) => {
       continue;
     }
 
+    // ✅ push data
     wardsToInsert.push({
       name,
       roomCategory: roomCat._id,
@@ -448,9 +470,10 @@ export const bulkUploadWards = async (req, res) => {
     successRows.push(rowIndex);
   }
 
+  // ================= INSERT =================
   try {
     const inserted = await Ward.insertMany(wardsToInsert, {
-      ordered: false, // 🔥 skip duplicates but continue
+      ordered: false, // 🔥 continue on duplicates
     });
 
     return res.json({
@@ -460,6 +483,7 @@ export const bulkUploadWards = async (req, res) => {
       errors: errorRows,
       successRows,
     });
+
   } catch (err) {
     return res.status(500).json({
       message: "Upload failed",
