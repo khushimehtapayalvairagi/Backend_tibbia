@@ -355,26 +355,33 @@ export const bulkUploadWards = async (req, res) => {
   const wardsToInsert = [];
 
   // ================= NORMALIZE CATEGORY =================
-  const normalizeCategory = (val) => {
-    val = val.toLowerCase().trim();
+ const normalizeCategory = (val) => {
+  val = val.toLowerCase().trim();
 
-    if (val.includes("icu")) return "ICU";
-    if (val.includes("hdu")) return "HDU";
+  // ICU cases
+  if (val.includes("icu") || val.includes("intensive care"))
+    return "ICU";
 
-    if (val.includes("delux")) return "DELUX ROOM";
+  // HDU cases
+  if (val.includes("hdu") || val.includes("standard hospital"))
+    return "HDU";
 
-    // 🔥 KEEP male/female
-    if (val.includes("general ward") && val.includes("female"))
-      return "General Ward Female";
+  // DELUX
+  if (val.includes("delux"))
+    return "DELUX ROOM";
 
-    if (val.includes("general ward") && val.includes("male"))
-      return "General Ward Male";
+  // General ward
+  if (val.includes("general ward") && val.includes("female"))
+    return "General Ward Female";
 
-    if (val.includes("general ward"))
-      return "General Ward";
+  if (val.includes("general ward") && val.includes("male"))
+    return "General Ward Male";
 
-    return val;
-  };
+  if (val.includes("general ward"))
+    return "General Ward";
+
+  return val;
+};
 
   // ================= PARSE BEDS =================
   const parseBeds = (bedsStr) => {
